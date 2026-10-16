@@ -1,0 +1,161 @@
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f4f6f7;color:#222;font-size:15px;overscroll-behavior:none}
+body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+
+.app{max-width:720px;margin:0 auto;min-height:100vh;background:#fff;position:relative;padding-bottom:90px}
+
+/* ---------- BARRA SUPERIOR ---------- */
+.bar{background:#4A8A80;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;font-weight:600;font-size:16px;gap:8px}
+.bar .back,.bar .bar-btn{background:none;border:none;color:#fff;font-size:22px;font-weight:bold;padding:0 8px;cursor:pointer}
+.bar .status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400;opacity:0.9}
+.dot{width:8px;height:8px;border-radius:50%;background:#999;display:inline-block}
+.dot.on{background:#7ddc8d;box-shadow:0 0 4px #7ddc8d}
+.dot.off{background:#ffb84d}
+
+/* ---------- SYNC BAR ---------- */
+.sync-bar{display:none;background:#7AADA3;color:#fff;text-align:center;padding:6px;font-size:13px;position:sticky;top:48px;z-index:9}
+.sync-bar.visible{display:block}
+
+/* ---------- CONTENIDO ---------- */
+.content{padding:16px}
+.h3{font-size:14px;font-weight:600;margin:18px 0 6px;color:#4A8A80;text-transform:uppercase;letter-spacing:0.4px}
+.muted{color:#777;font-size:13px}
+.muted.tiny{font-size:11px}
+
+/* ---------- PASOS ---------- */
+.pasos{display:flex;gap:4px;margin-bottom:10px}
+.paso{flex:1;text-align:center;font-size:11px;padding:5px 2px;border-radius:6px;background:#eef2f2;color:#7a8c89;font-weight:600}
+.paso.on{background:#4A8A80;color:#fff}
+
+/* ---------- TABS ---------- */
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid #e0e4e6}
+.tab{flex:1;background:none;border:none;padding:10px 4px;font-size:13px;color:#888;cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
+.tab.active{color:#4A8A80;border-bottom-color:#4A8A80;font-weight:600}
+.tab .count{background:#e8edee;color:#555;padding:2px 7px;border-radius:10px;font-size:11px;margin-left:4px;font-weight:600}
+.tab.active .count{background:#4A8A80;color:#fff}
+
+/* ---------- LIST ---------- */
+.list{display:flex;flex-direction:column;gap:8px}
+.list-item{background:#fff;border:1px solid #e0e4e6;border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color 0.15s}
+.list-item:active{border-color:#4A8A80;background:#f7fafa}
+.list-item .li-title{font-weight:600;font-size:15px;color:#222;margin-bottom:3px}
+.list-item .li-sub{font-size:13px;color:#666}
+.list-item .li-meta{font-size:11px;color:#999;margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.li-meta-right{display:flex;align-items:center;gap:6px}
+.btn-delete-exp{background:transparent;border:none;cursor:pointer;font-size:18px;padding:4px 8px;color:#A32D2D;border-radius:4px}
+.badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:8px;background:#eaf2f1;color:#4A8A80;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+.badge.pend{background:#fff4e0;color:#c47b00}
+.badge.vis{background:#e0ecff;color:#2d5fb8}
+.badge.env{background:#e0f5e3;color:#2a7a3d}
+.empty{padding:40px 20px;text-align:center;color:#999}
+
+/* ---------- FORM ---------- */
+.form label{display:block;font-size:12px;font-weight:600;color:#555;margin:10px 0 4px;text-transform:uppercase;letter-spacing:0.3px}
+.form input,.form textarea,.form select{width:100%;padding:10px 12px;border:1px solid #d0d5d8;border-radius:8px;font-size:15px;font-family:inherit;background:#fff;color:#222}
+.form input:focus,.form textarea:focus,.form select:focus{border-color:#4A8A80;outline:none;box-shadow:0 0 0 2px rgba(74,138,128,0.15)}
+.form textarea{resize:vertical;min-height:70px}
+.row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:420px){.form .row-2{grid-template-columns:1fr}}
+
+/* ---------- BOTONES ---------- */
+.btn-primary{width:100%;background:#4A8A80;color:#fff;border:none;padding:14px;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-top:16px}
+.btn-primary:active{background:#3e7870}
+.btn-secondary{width:100%;background:#fff;color:#4A8A80;border:1.5px solid #4A8A80;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
+.btn-secondary:active{background:#eaf2f1}
+.btn-danger{width:100%;background:#fff;color:#c23d3d;border:1.5px solid #c23d3d;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
+.card-btn{width:100%;background:#fff;border:1px solid #d0d5d8;border-radius:12px;padding:16px;text-align:left;cursor:pointer;margin-bottom:10px}
+.card-btn:active{border-color:#4A8A80;background:#f7fafa}
+.card-btn .card-title{font-size:16px;font-weight:600;color:#222;margin-bottom:3px}
+.card-btn .card-sub{font-size:13px;color:#777}
+
+/* ---------- FAB ---------- */
+.fab-row{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:8;width:calc(100% - 24px);max-width:700px}
+.fab-main{flex:1;background:#4A8A80;color:#fff;border:none;padding:15px;border-radius:28px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(74,138,128,0.35)}
+.fab-alt{width:52px;height:52px;background:#fff;color:#4A8A80;border:1.5px solid #4A8A80;border-radius:50%;font-size:22px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+#screen-home:not(.active) ~ .fab-row{display:none}
+
+/* ---------- FOTOS ---------- */
+.photo-row{display:flex;gap:10px;align-items:center;margin-top:6px}
+.photo-row button{flex:1;margin-top:0;padding:10px 12px}
+.galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px}
+.galeria .ft{position:relative;border:1px solid #e0e4e6;border-radius:8px;overflow:hidden;aspect-ratio:1/1;background:#f2f4f3;display:flex;align-items:center;justify-content:center;font-size:12px;color:#5c7370}
+.galeria .ft img{width:100%;height:100%;object-fit:cover;display:block}
+.galeria .ft button{position:absolute;top:3px;right:3px;border:none;background:rgba(0,0,0,0.55);color:#fff;border-radius:50%;width:24px;height:24px;font-size:13px;line-height:24px;padding:0;cursor:pointer}
+
+/* ---------- TOAST ---------- */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(100px);background:#222;color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;z-index:300;opacity:0;transition:all 0.3s;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- SCREENS ---------- */
+.screen{display:none}
+.screen.active{display:block}
+
+/* Checkbox row */
+.ck-row{display:flex;align-items:center;gap:10px;margin:10px 0 6px}
+.ck-row input[type="checkbox"]{width:20px;height:20px;accent-color:#4A8A80;margin:0}
+.ck-row label{margin:0 !important;text-transform:none !important;letter-spacing:0 !important;font-size:14px !important;color:#222 !important;font-weight:normal !important}
+
+/* Firma */
+.firma-wrap{border:2px dashed #4A8A80;border-radius:10px;background:#fff;margin:8px 0;touch-action:none}
+#firma-canvas{display:block;width:100%;height:260px;cursor:crosshair;touch-action:none;border-radius:8px}
+.firma-btns{display:flex;align-items:center;gap:12px;margin-top:4px}
+.firma-btns button{width:auto !important;margin:0 !important;padding:8px 16px !important;flex:0 0 auto}
+
+/* Modal */
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:#fff;border-radius:12px;padding:22px;width:100%;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,0.3)}
+.modal-box h3{margin:0 0 8px;color:#4A8A80;font-size:17px}
+.modal-box input{width:100%;padding:10px 12px;border:1px solid #d0d5d8;border-radius:8px;font-size:15px;margin-top:8px}
+.modal-btns{display:flex;gap:10px;margin-top:14px}
+.modal-btns button{flex:1;margin:0 !important}
+
+/* Portada */
+.home-header{text-align:center;padding:30px 20px 20px;background:linear-gradient(135deg,#4A8A80 0%,#7AADA3 100%);margin:-16px -16px 16px;border-radius:0 0 20px 20px}
+.app-title{font-size:26px;font-weight:700;color:#fff;margin:0 0 8px;letter-spacing:-0.5px}
+.app-subtitle{font-size:13px;color:rgba(255,255,255,0.92);margin:0;line-height:1.5;font-weight:500}
+
+/* =================== CROQUIS =================== */
+.screen-croquis.active{display:flex;flex-direction:column;position:fixed;inset:0;max-width:720px;margin:0 auto;background:#fff;z-index:20;padding-top:env(safe-area-inset-top)}
+.screen-croquis .bar{position:relative}
+.croq-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.bar-chip{border:none;border-radius:8px;padding:7px 11px;font-size:13px;font-weight:600;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+#btDot{width:9px;height:9px;border-radius:50%;background:#C9D6D3}
+.bar-chip.on #btDot{background:#5BE38A;box-shadow:0 0 6px #5BE38A}
+#lienzoWrap{flex:1;position:relative;background:#fff;min-height:0}
+#cv{display:block;width:100%;height:100%;touch-action:none}
+#hint{position:absolute;top:10px;left:0;right:0;text-align:center;pointer-events:none;color:#8AA39E;font-size:13px;padding:0 20px}
+#totalBar{position:absolute;bottom:10px;left:10px;background:rgba(74,138,128,.92);color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600}
+#laserToast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#22302D;color:#fff;border-radius:20px;padding:8px 16px;font-size:14px;font-weight:700;display:none;z-index:5}
+#laserToast .pt{color:#FF8C82}
+.croq-nav{flex:0 0 auto;display:flex;background:#fff;border-top:1px solid #DDE5E3;padding:6px 2px calc(6px + env(safe-area-inset-bottom))}
+.croq-nav button{flex:1;border:none;background:none;font-size:10.5px;color:#22302D;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0}
+.croq-nav button .ic{font-size:19px;line-height:1}
+
+.velo{position:fixed;inset:0;background:rgba(20,30,28,.45);display:none;z-index:210}
+.velo.abierto{display:block}
+.hoja{position:fixed;left:0;right:0;bottom:0;max-width:720px;margin:0 auto;background:#fff;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:85%;overflow-y:auto}
+.hoja h2{margin:0 0 12px;font-size:16px;color:#4A8A80}
+.tipos{display:flex;gap:8px;margin-bottom:14px}
+.tipos button{flex:1;padding:12px 4px;border-radius:10px;border:2px solid #D8E2E0;background:#fff;font-size:14px;font-weight:600;color:#22302D}
+.tipos button.sel{border-color:#4A8A80;background:#EAF3F1;color:#4A8A80}
+.campo{margin-bottom:12px}
+.campo label{display:block;font-size:12px;font-weight:600;color:#5C7370;margin-bottom:4px}
+.campo input,.campo select{width:100%;padding:12px;font-size:18px;border:2px solid #D8E2E0;border-radius:10px;background:#fff;color:#22302D}
+.campo select{font-size:15px}
+.campo input:focus{outline:none;border-color:#4A8A80;background:#F4FAF8}
+.campo input.laserOK{border-color:#D93025}
+.laserHint{font-size:12px;color:#D93025;font-weight:600;margin:-6px 0 12px;display:none}
+.laserHint.visible{display:block}
+.filaBtn{display:flex;gap:10px;margin-top:6px}
+.filaBtn button{flex:1;padding:14px;border-radius:12px;border:none;font-size:16px;font-weight:700}
+.bCancel{background:#ECF0EF;color:#22302D;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600}
+.bCancel.wide{width:100%;margin-bottom:8px}
+.bOk{background:#4A8A80;color:#fff}
+#cvNorte{display:block;margin:0 auto;touch-action:none}
+.norte-info{text-align:center;margin:8px 0;font-size:14px;color:#5C7370}
+.filaSeg{display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid #EDF1F0;font-size:14px}
+.filaSeg .num{width:26px;height:26px;border-radius:50%;background:#EAF3F1;color:#4A8A80;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.filaSeg .txt{flex:1;min-width:0}
+.filaSeg .txt small{color:#7A8C89;display:block}
+.filaSeg button{border:none;background:#F2F4F3;border-radius:8px;padding:8px 10px;font-size:15px}
+#resumenCroquis{margin:10px 0}

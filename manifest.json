@@ -1,0 +1,14 @@
+{
+  "name": "CEE Visitas Pro — Joanfe Ribes",
+  "short_name": "CEE Pro",
+  "start_url": "/cee-visitas-pro/",
+  "scope": "/cee-visitas-pro/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#4A8A80",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4A8A80">
+<title>CEE Visitas · Joanfe Ribes</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css?v=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+
+<div class="toast" id="toast"></div>
+<div class="sync-bar" id="sync-bar"><span id="sync-text">Sincronizando…</span></div>
+
+<!-- Modal municipio -->
+<div class="modal" id="modal-muni" style="display:none">
+  <div class="modal-box">
+    <h3>Municipio personalizado</h3>
+    <p class="muted">Has seleccionado "Otro". Introduce el nombre del municipio:</p>
+    <input type="text" id="muni-custom" placeholder="ej. Tormos">
+    <div class="modal-btns">
+      <button class="btn-secondary" id="muni-cancel">Cancelar</button>
+      <button class="btn-primary" id="muni-ok">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal cámara -->
+<div class="modal" id="modal-camera" style="display:none">
+  <div class="modal-box" style="max-width:600px">
+    <h3 id="camera-title">Capturar foto</h3>
+    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:8px;background:#000"></video>
+    <canvas id="camera-canvas" style="display:none"></canvas>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn-secondary" id="camera-cancel">Cerrar</button>
+      <button class="btn-primary" id="camera-capture">📷 Capturar</button>
+    </div>
+    <p class="muted tiny" id="camera-count" style="margin-top:8px">—</p>
+  </div>
+</div>
+
+<!-- HOME -->
+<section class="screen active" id="screen-home">
+  <div class="bar">
+    <span>CEE Visitas</span>
+    <span class="status"><span class="dot" id="status-dot"></span><span id="status-text">…</span></span>
+  </div>
+  <div class="content">
+    <div class="home-header">
+      <h1 class="app-title">CEE Visitas</h1>
+      <p class="app-subtitle">JOANFE RIBES<br>Oficina Tècnica</p>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="pendiente">Pendientes <span class="count" id="cnt-pend">0</span></button>
+      <button class="tab" data-tab="visitado">Visitados <span class="count" id="cnt-vis">0</span></button>
+      <button class="tab" data-tab="enviado">Enviados <span class="count" id="cnt-env">0</span></button>
+    </div>
+    <div class="list" id="list-exps"></div>
+    <div class="empty" id="empty-list" style="display:none"><p>No hay expedientes en esta categoría.</p></div>
+  </div>
+  <div class="fab-row">
+    <button class="fab-main" id="btn-nuevo">+ Nuevo expediente</button>
+    <button class="fab-alt" id="btn-sync">↻</button>
+    <button class="fab-alt" id="btn-cfg">⚙</button>
+  </div>
+</section>
+
+<!-- NUEVO -->
+<section class="screen" id="screen-nuevo">
+  <div class="bar"><button class="back" data-go="home">‹</button><span>Nuevo expediente</span></div>
+  <div class="content">
+    <p class="muted">¿De dónde quieres cargar los datos?</p>
+    <button class="card-btn" id="btn-origen-web">
+      <div class="card-title">Desde formulario web</div>
+      <div class="card-sub">Solicitudes recibidas en joanferibes.com</div>
+    </button>
+    <button class="card-btn" id="btn-origen-manual">
+      <div class="card-title">Manual</div>
+      <div class="card-sub">Introducir los datos a mano</div>
+    </button>
+  </div>
+</section>
+
+<!-- IMPORTAR -->
+<section class="screen" id="screen-importar">
+  <div class="bar">
+    <button class="back" data-go="nuevo">‹</button>
+    <span>Solicitudes pendientes</span>
+    <button class="bar-btn" id="btn-importar-reload">↻</button>
+  </div>
+  <div class="content">
+    <div class="list" id="list-solicitudes"></div>
+    <div class="empty" id="empty-sol" style="display:none"><p>No hay solicitudes pendientes.</p></div>
+  </div>
+</section>
+
+<!-- DATOS -->
+<section class="screen" id="screen-datos">
+  <div class="bar"><button class="back" data-go="home">‹</button><span id="datos-title">Datos</span></div>
+  <div class="content">
+    <div class="pasos"><span class="paso on">1 Datos</span><span class="paso">2 Croquis</span><span class="paso">3 Checklist</span><span class="paso">4 Enviar</span></div>
+    <div class="form">
+      <label>Nº expediente</label>
+      <input type="text" id="f-numexp" placeholder="ej. 233-26-C">
+      <label>Nombre</label>
+      <input type="text" id="f-nombre">
+      <div class="row-2">
+        <div><label>Tipo doc.</label>
+          <select id="f-tipodoc"><option>DNI</option><option>NIE</option><option>CIF</option><option>Pasaporte</option></select>
+        </div>
+        <div><label>Nº documento</label><input type="text" id="f-numdoc"></div>
+      </div>
+      <div class="row-2">
+        <div><label>Teléfono</label><input type="tel" id="f-tel"></div>
+        <div><label>Email</label><input type="email" id="f-email"></div>
+      </div>
+      <label>Dirección</label>
+      <input type="text" id="f-direccion">
+      <div class="row-2">
+        <div><label>Municipio</label><select id="f-muni"></select></div>
+        <div><label>Cód. Postal</label><input type="text" id="f-cp" inputmode="numeric"></div>
+      </div>
+      <div id="f-muni-custom-row" style="display:none">
+        <label>Municipio personalizado</label>
+        <input type="text" id="f-muni-custom-inp">
+      </div>
+      <label>Referencia catastral</label>
+      <input type="text" id="f-refcat">
+      <label>Fecha de visita</label>
+      <input type="date" id="f-fechavisita">
+      <label>Observaciones</label>
+      <textarea id="f-obs" rows="3"></textarea>
+    </div>
+    <button class="btn-secondary" id="btn-guardar-datos" style="margin-bottom:8px">💾 Guardar cambios</button>
+    <button class="btn-primary" id="btn-ir-croquis">Siguiente: Croquis ›</button>
+    <button class="btn-secondary" id="btn-saltar-checklist">Ir directamente al checklist ›</button>
+  </div>
+</section>
+
+<!-- CROQUIS -->
+<section class="screen screen-croquis" id="screen-croquis">
+  <div class="bar">
+    <button class="back" id="croq-back">‹</button>
+    <span class="croq-title" id="croq-title">Croquis</span>
+    <button class="bar-chip" id="btBtn"><span id="btDot"></span><span id="btTxt">Láser</span></button>
+  </div>
+  <div id="lienzoWrap">
+    <canvas id="cv"></canvas>
+    <div id="hint">Dibuja con el dedo la dirección del primer tramo</div>
+    <div id="totalBar" style="display:none"></div>
+    <div id="laserToast"></div>
+  </div>
+  <nav class="croq-nav">
+    <button id="bUndo"><span class="ic">↩️</span>Deshacer</button>
+    <button id="bCerrar"><span class="ic">⭕</span>Cerrar</button>
+    <button id="bNuevoT"><span class="ic">🔀</span>Tramo</button>
+    <button id="bNorte"><span class="ic">🧭</span>Norte</button>
+    <button id="bLista"><span class="ic">📋</span>Lista</button>
+    <button id="bAjustes"><span class="ic">⚙️</span>Ajustes</button>
+    <button id="bCroqSig"><span class="ic">✅</span>Checklist</button>
+  </nav>
+</section>
+
+<!-- Hoja: nuevo segmento -->
+<div class="velo" id="veloSeg">
+  <div class="hoja">
+    <h2 id="segTitulo">Nuevo tramo</h2>
+    <div class="tipos">
+      <button id="tPared">Pared</button>
+      <button id="tVentana">Ventana</button>
+      <button id="tPuerta">Puerta</button>
+    </div>
+    <div class="laserHint" id="laserHint">📡 Pulsa DIST en el láser para rellenar el campo activo</div>
+    <div class="campo" id="cLong">
+      <label id="lblLong">Longitud (m)</label>
+      <input id="inLong" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0,00">
+    </div>
+    <div class="campo" id="cAlto" style="display:none">
+      <label>Alto (m)</label>
+      <input id="inAlto" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0,00">
+    </div>
+    <div class="campo" id="cZona">
+      <label>Zona del cerramiento</label>
+      <div class="tipos">
+        <button id="zExt">Exterior</button>
+        <button id="zMed">Medianera</button>
+        <button id="zCom">Z. común</button>
+      </div>
+    </div>
+    <div class="campo" id="cMat" style="display:none">
+      <div class="row-2">
+        <div>
+          <label>Carpintería</label>
+          <select id="inMat"></select>
+        </div>
+        <div>
+          <label>Vidrio</label>
+          <select id="inVid"></select>
+        </div>
+      </div>
+    </div>
+    <div class="filaBtn">
+      <button class="bCancel" id="bSegCancel">Cancelar</button>
+      <button class="bOk" id="bAddSeg">Añadir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hoja: ajustes del croquis -->
+<div class="velo" id="veloAjustes">
+  <div class="hoja">
+    <h2>Ajustes del croquis</h2>
+    <div class="row-2">
+      <div class="campo">
+        <label>Carpintería por defecto</label>
+        <select id="inMatDef"></select>
+      </div>
+      <div class="campo">
+        <label>Vidrio por defecto</label>
+        <select id="inVidDef"></select>
+      </div>
+    </div>
+    <p class="muted tiny">Son los mismos que la carpintería y el vidrio del checklist. Cada hueco puede tener los suyos.</p>
+    <div class="campo">
+      <label>Ángulos del trazo</label>
+      <div class="tipos">
+        <button id="aSnap">90° / 45°</button>
+        <button id="aLibre">Libre</button>
+      </div>
+    </div>
+    <div class="campo">
+      <label>Exportar</label>
+      <div class="tipos">
+        <button id="bExpPDF">PDF</button>
+        <button id="bExpDXF">DXF</button>
+        <button id="bExpJSON">JSON</button>
+      </div>
+    </div>
+    <button class="btn-danger" id="bBorrarCroquis">Borrar todo el croquis</button>
+    <div class="filaBtn">
+      <button class="bOk" id="bAjustesOk">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hoja: Norte -->
+<div class="velo" id="veloNorte">
+  <div class="hoja">
+    <h2>Orientar el Norte</h2>
+    <p class="muted" style="margin:0 0 10px">Gira la rueda con el dedo hasta que la flecha N apunte al norte real. Con la brújula: pon el móvil plano, con la parte de arriba de la pantalla hacia donde queda arriba en el dibujo, espera a que la aguja se quede quieta y pulsa «Fijar Norte».</p>
+    <canvas id="cvNorte" width="260" height="260"></canvas>
+    <div class="norte-info">Rumbo del Norte: <b id="nNorteTxt">0°</b> <span id="nSensorTxt" class="muted"></span></div>
+    <button class="bCancel wide" id="bSensor">🧭 Usar brújula del móvil</button>
+    <div class="filaBtn">
+      <button class="bCancel" id="bNorteCancel">Cancelar</button>
+      <button class="bOk" id="bNorteOk">Fijar Norte</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hoja: lista de tramos -->
+<div class="velo" id="veloLista">
+  <div class="hoja">
+    <h2>Tramos medidos</h2>
+    <div id="listaSegs"></div>
+    <div id="resumenCroquis" class="muted tiny"></div>
+    <div class="filaBtn"><button class="bCancel" id="bListaCerrar">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- CHECKLIST -->
+<section class="screen" id="screen-checklist">
+  <div class="bar"><button class="back" id="chk-back">‹</button><span>Checklist de visita</span></div>
+  <div class="content">
+    <div class="pasos"><span class="paso">1 Datos</span><span class="paso">2 Croquis</span><span class="paso on">3 Checklist</span><span class="paso">4 Enviar</span></div>
+    <div class="form">
+
+      <h3 class="h3">Datos generales</h3>
+      <label>Tipo de inmueble</label>
+      <select id="c-tipoViv">
+        <option value="">—</option>
+        <option>Vivienda individual</option>
+        <option>Vivienda unifamiliar</option>
+        <option>Local</option>
+      </select>
+      <div class="ck-row">
+        <input type="checkbox" id="c-reforma">
+        <label for="c-reforma">Reforma importante</label>
+      </div>
+      <div id="c-reformaAnyo-row" style="display:none">
+        <label>Año de la reforma</label>
+        <input type="number" id="c-reformaAnyo" placeholder="ej. 2015">
+      </div>
+
+      <h3 class="h3">Envolvente — Muros / fachada</h3>
+      <label>Posibilidad de aislamiento en fachada</label>
+      <select id="c-posAisl">
+        <option value="">—</option>
+        <option>Posiblemente sí</option>
+        <option>Posiblemente no</option>
+        <option>No lo sabemos</option>
+      </select>
+      <label>Espesor estimado muros (cm)</label>
+      <input type="number" id="c-murosEspesor" placeholder="30">
+
+      <h3 class="h3">Envolvente — Huecos (por defecto)</h3>
+      <div class="row-2">
+        <div><label>Carpintería</label><select id="c-carpinteria"></select></div>
+        <div><label>Acristalamiento</label><select id="c-acristalamiento"></select></div>
+      </div>
+      <label>Permeabilidad</label>
+      <select id="c-permeabilidad">
+        <option value="">—</option><option>Estanco</option><option>Poco estanco</option>
+      </select>
+      <p class="muted tiny">La carpintería y el vidrio de aquí son los de defecto del croquis; los huecos distintos se cambian en el croquis.</p>
+
+      <h3 class="h3">Envolvente — Cubierta y suelo</h3>
+      <div class="row-2">
+        <div><label>Techo</label>
+          <select id="c-techo">
+            <option value="">—</option>
+            <option>Cubierta plana</option>
+            <option>Cubierta inclinada</option>
+            <option>Bajo cubierta no habitable</option>
+            <option>Otra vivienda</option>
+          </select>
+        </div>
+        <div><label>Aparentemente aislada</label>
+          <select id="c-techoAislada">
+            <option value="">—</option><option>Sí</option><option>No</option>
+          </select>
+        </div>
+      </div>
+      <label>Suelo</label>
+      <select id="c-suelo">
+        <option value="">—</option>
+        <option>Forjado sanitario</option>
+        <option>Directamente suelo</option>
+        <option>Local o garaje no calefactado</option>
+        <option>Otra vivienda</option>
+      </select>
+
+      <h3 class="h3">Calefacción</h3>
+      <label>Sistema</label>
+      <select id="c-calTipo">
+        <option value="">—</option>
+        <option>No tiene instalada</option>
+        <option>Caldera</option>
+        <option>Bomba de calor</option>
+        <option>Aerotermia</option>
+        <option>Eléctrica (efecto Joule)</option>
+        <option>Suelo radiante</option>
+        <option>Biomasa</option>
+        <option>Otro</option>
+      </select>
+      <div id="c-calef-detalle">
+        <div class="row-2">
+          <div><label>Combustible</label>
+            <select id="c-calComb">
+              <option value="">—</option><option>Gas natural</option><option>Gasóleo</option><option>Electricidad</option><option>Aerotermia</option><option>Biomasa</option>
+            </select>
+          </div>
+          <div><label>Distribución</label>
+            <select id="c-calDist">
+              <option value="">—</option><option>Radiadores</option><option>Suelo radiante</option><option>Aire (conductos)</option><option>Splits</option><option>Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="row-2">
+          <div><label>Antigüedad</label>
+            <select id="c-calAntig"><option value="">—</option><option>Actual</option><option>Antigua</option></select>
+          </div>
+          <div><label>% vivienda calefactada</label><input type="number" id="c-calPct" min="0" max="100" placeholder="80"></div>
+        </div>
+      </div>
+
+      <h3 class="h3">Refrigeración</h3>
+      <label>Tipo (distribución)</label>
+      <select id="c-refTipo">
+        <option value="">—</option>
+        <option>No tiene instalada</option>
+        <option>Splits</option>
+        <option>Conductos</option>
+        <option>Fancoil</option>
+        <option>Sistema combinado (splits + conductos)</option>
+      </select>
+      <div id="c-refri-detalle">
+        <label>Sistema / energía</label>
+        <select id="c-refComb"><option value="">—</option><option>Electricidad</option><option>Aerotermia</option></select>
+        <div class="row-2">
+          <div><label>Antigüedad</label>
+            <select id="c-refAntig"><option value="">—</option><option>Actual</option><option>Antigua</option></select>
+          </div>
+          <div><label>% vivienda climatizada</label><input type="number" id="c-refPct" min="0" max="100" placeholder="60"></div>
+        </div>
+      </div>
+
+      <h3 class="h3">ACS (Agua Caliente Sanitaria)</h3>
+      <label>Tipo</label>
+      <select id="c-acsTipo">
+        <option value="">—</option><option>Caldera</option><option>Termo eléctrico</option><option>Bomba de calor ACS</option><option>Energía solar</option>
+      </select>
+      <div class="row-2">
+        <div><label>Modalidad</label>
+          <select id="c-acsModalidad"><option value="">—</option><option>Instantánea</option><option>Con acumulador</option></select>
+        </div>
+        <div><label>Acumulación</label>
+          <select id="c-acsAcum">
+            <option value="">—</option><option>50 L</option><option>80 L</option><option>100 L</option>
+            <option>150 L</option><option>200 L</option><option>300 L</option><option>400 L</option>
+          </select>
+        </div>
+      </div>
+      <label>Combustible</label>
+      <select id="c-acsComb">
+        <option value="">—</option><option>Gas natural</option><option>Gasóleo</option><option>Electricidad</option><option>Aerotermia</option><option>Solar</option>
+      </select>
+      <div class="ck-row">
+        <input type="checkbox" id="c-acsMixta">
+        <label for="c-acsMixta">ACS mixta (compartida con calefacción)</label>
+      </div>
+
+      <h3 class="h3">Energías renovables</h3>
+      <div class="ck-row">
+        <input type="checkbox" id="c-renPaneles">
+        <label for="c-renPaneles">Dispone de paneles solares</label>
+      </div>
+      <div id="c-ren-row" style="display:none">
+        <label>Potencia instalada (kW)</label>
+        <input type="number" id="c-renPotencia" step="0.1" placeholder="3.5">
+      </div>
+
+      <h3 class="h3">Observaciones</h3>
+      <textarea id="c-obs" rows="3"></textarea>
+
+      <h3 class="h3">Fotos de fachada</h3>
+      <div class="photo-row">
+        <button class="btn-secondary" data-cam="fachada" data-cam-title="Fachada">📷 Cámara</button>
+        <button class="btn-secondary" data-file="fachada">🖼️ Galería</button>
+      </div>
+      <div class="galeria" id="gal-fachada"></div>
+
+      <h3 class="h3">Fotos de detalle</h3>
+      <div class="photo-row">
+        <button class="btn-secondary" data-cam="detalle" data-cam-title="Detalle">📷 Cámara</button>
+        <button class="btn-secondary" data-file="detalle">🖼️ Galería</button>
+      </div>
+      <div class="galeria" id="gal-detalle"></div>
+
+      <h3 class="h3">Placas de los equipos</h3>
+      <p class="muted tiny">Placa de características de cada equipo (unidad exterior, caldera, termo…) cuando se pueda. Sirve para la potencia real.</p>
+      <div class="photo-row">
+        <button class="btn-secondary" data-cam="placas" data-cam-title="Placa de equipo">📷 Cámara</button>
+        <button class="btn-secondary" data-file="placas">🖼️ Galería</button>
+      </div>
+      <div class="galeria" id="gal-placas"></div>
+
+      <h3 class="h3">Otros croquis (foto o PDF)</h3>
+      <div class="photo-row">
+        <button class="btn-secondary" data-cam="croquisExtra" data-cam-title="Croquis en papel">📷 Cámara</button>
+        <button class="btn-secondary" data-file="croquisExtra" data-pdf="1">📁 Archivo</button>
+      </div>
+      <div class="galeria" id="gal-croquisExtra"></div>
+      <input type="file" id="inp-fotos" accept="image/*" multiple hidden>
+      <input type="file" id="inp-fotos-pdf" accept="image/*,application/pdf" multiple hidden>
+
+      <h3 class="h3">Firma del titular</h3>
+      <div class="ck-row">
+        <input type="checkbox" id="c-firmaReq">
+        <label for="c-firmaReq">Necesidad de firma del titular</label>
+      </div>
+      <div id="firma-box" style="display:none">
+        <p class="muted tiny">Firma aquí con el dedo (móvil) o el lápiz (tablet). La firma se guardará y se adjuntará al email.</p>
+        <div class="firma-wrap"><canvas id="firma-canvas"></canvas></div>
+        <div class="firma-btns">
+          <button class="btn-secondary" id="btn-firma-clear" type="button">Borrar</button>
+          <span id="firma-info" class="muted">—</span>
+        </div>
+        <button class="btn-primary" id="btn-generar-impresos" type="button" style="margin-top:12px;background:#0A2A6B">📄 Generar impresos firmados y enviar</button>
+        <p class="muted tiny" style="margin-top:6px">Genera el Acta y la Delegación con la firma del propietario y los envía a joanferibes@gmail.com</p>
+      </div>
+
+    </div>
+
+    <button class="btn-primary" id="btn-guardar">Guardar expediente (marca como visitado)</button>
+    <button class="btn-secondary" id="btn-drive">☁️ Guardar en carpeta del expediente (Drive)</button>
+    <p class="muted tiny" id="drive-info">—</p>
+    <button class="btn-secondary" id="btn-enviar">Preparar email al colaborador ›</button>
+  </div>
+</section>
+
+<!-- EMAIL -->
+<section class="screen" id="screen-email">
+  <div class="bar"><button class="back" data-go="checklist">‹</button><span>Enviar al colaborador</span></div>
+  <div class="content">
+    <div class="pasos"><span class="paso">1 Datos</span><span class="paso">2 Croquis</span><span class="paso">3 Checklist</span><span class="paso on">4 Enviar</span></div>
+    <div class="form">
+      <label>Destinatario</label>
+      <input type="email" id="e-to" placeholder="colaborador@ejemplo.com">
+      <label>Asunto</label>
+      <input type="text" id="e-asunto">
+      <label>Cuerpo del email</label>
+      <textarea id="e-body" rows="14"></textarea>
+    </div>
+    <p class="muted">Se creará un único borrador en tu Gmail con el checklist en PDF, el croquis (PDF y DXF), las fotos y la firma. Podrás revisarlo y enviarlo desde Gmail.</p>
+    <button class="btn-primary" id="btn-crear-borrador">Crear borrador en Gmail (con adjuntos)</button>
+  </div>
+</section>
+
+<!-- CONFIG -->
+<section class="screen" id="screen-cfg">
+  <div class="bar"><button class="back" data-go="home">‹</button><span>Configuración</span></div>
+  <div class="content">
+    <div class="form">
+      <label>URL del Apps Script</label>
+      <input type="text" id="cfg-url">
+      <p class="muted tiny">Dirección del script de Google de esta app (CEE Visitas Pro). No la toques a menos que sepas lo que haces.</p>
+      <label>Email del colaborador CE3X</label>
+      <input type="email" id="cfg-colab" placeholder="colaborador@ejemplo.com">
+      <label>Firma de email</label>
+      <textarea id="cfg-firma" rows="6"></textarea>
+      <button class="btn-primary" id="btn-save-cfg">Guardar configuración</button>
+      <h3 class="h3">Sincronización</h3>
+      <button class="btn-secondary" id="btn-sync-now">↻ Sincronizar ahora</button>
+      <button class="btn-secondary" id="btn-test-conn">Probar conexión</button>
+      <p class="muted tiny" id="sync-info">—</p>
+      <h3 class="h3">Zona peligrosa</h3>
+      <button class="btn-danger" id="btn-reset-local">Borrar datos locales</button>
+      <p class="muted tiny">Borra solo los datos de este dispositivo. Los del servidor y Drive se mantienen.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+<script src="config.js?v=1"></script>
+<script src="croquis.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
