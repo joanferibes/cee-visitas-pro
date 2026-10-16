@@ -7,7 +7,15 @@ const DEFAULT_SCRIPT_URL = (window.CEE_CONFIG && window.CEE_CONFIG.scriptUrl) ||
 
 const MUNIS = ["","Pedreguer","Dénia","Ondara","Xàbia","Teulada","Moraira","Jesús Pobre","Gata de Gorgos","El Verger","El Poble Nou de Benitatxell","Els Poblets","Beniarbeig","Benidoleig","Benimeli","Benissa","Calp","Orba","Parcent","Senija","Lliber","Xaló","Alcalalí","Sagra","Murla","Ràfol d'Almúnia","Pego","Oliva","Tormos","Otro"];
 const MUNI_ALIAS = {"benitachell":"El Poble Nou de Benitatxell","benitatxell":"El Poble Nou de Benitatxell","el poble nou de benitatxell":"El Poble Nou de Benitatxell","poble nou de benitatxell":"El Poble Nou de Benitatxell","el poble nou":"El Poble Nou de Benitatxell","denia":"Dénia","jabea":"Xàbia","javea":"Xàbia","el vergel":"El Verger","calpe":"Calp","jalon":"Xaló","jalón":"Xaló","rafol de almunia":"Ràfol d'Almúnia","rafol d'almunia":"Ràfol d'Almúnia","ràfol de almunia":"Ràfol d'Almúnia"};
-const GRUPOS_FOTO = { fachada:"fachada", detalle:"detalle", placas:"placa", croquisExtra:"croquis_extra" };
+const GRUPOS_FOTO = { fachada:"fachada", plano:"plano_situacion", detalle:"detalle", placas:"placa", croquisExtra:"croquis_extra" };
+const FOTO_UNICA = { fachada:true, plano:true };   // solo una: la nueva sustituye a la anterior
+// Campos sencillos del checklist (clave → id del formulario)
+const CAMPOS_CK = { posicion:"c-posicion", numPlantas:"c-numPlantas", alturaLibre:"c-alturaLibre",
+  localActividad:"c-localActividad", localHorario:"c-localHorario", localLuz:"c-localLuz", localLuminarias:"c-localLuminarias",
+  tipoFachada:"c-tipoFachada", bajocubAisl:"c-bajocubAisl", bajocubVent:"c-bajocubVent",
+  calPot:"c-calPot", calCop:"c-calCop", refPot:"c-refPot", refEer:"c-refEer", acsPot:"c-acsPot",
+  renTipo:"c-renTipo", renNumPaneles:"c-renNumPaneles", renOrient:"c-renOrient", renIncl:"c-renIncl", renBaterias:"c-renBaterias",
+  renCaptM2:"c-renCaptM2", renDeposito:"c-renDeposito" };
 
 // ---------------- IndexedDB (base propia, no se mezcla con la app actual) ----------------
 const DB_NAME="cee_visitas_pro_v1", DB_VER=1;
@@ -76,8 +84,9 @@ function prefijoExp(n){
 }
 window.CEE_prefijoExp=prefijoExp;
 function toast(m,ms){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),ms||2800); }
-function showSync(m){ const b=$("sync-bar"); $("sync-text").textContent=m; b.classList.add("visible"); }
-function hideSync(){ $("sync-bar").classList.remove("visible"); }
+// Sincronizar usa la franja pequeña; todo lo que empieza por "Subiendo", "Creando", "Preparando", "Generando" sale grande en el centro
+function showSync(m){ const b=$("sync-bar"); $("sync-text").textContent=m; b.classList.toggle("grande", !/^Sincroniz|^Probando/.test(m)); b.classList.add("visible"); }
+function hideSync(){ $("sync-bar").classList.remove("visible","grande"); }
 function setStatus(on){ state.online=on; const d=$("status-dot"), t=$("status-text"); if(on){ d.className="dot on"; t.textContent="Online"; } else { d.className="dot off"; t.textContent="Offline"; } }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function formatFecha(iso){ if(!iso) return "—"; try{const d=new Date(iso); return d.toLocaleDateString("es-ES")+" "+d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});}catch(e){return "—";} }
@@ -97,8 +106,9 @@ function pedirMunicipioCustom(initial, onOk){
 function nuevoExpedienteVacio(){
   return { id:"exp_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), app:"pro", origen:"manual", fechaCreacion:new Date().toISOString(), fechaActualizacion:new Date().toISOString(), estado:"pendiente", solicitudId:"", numExp:"",
     datos:{nombre:"", tipoDocumento:"DNI", numeroDocumento:"", telefono:"", email:"", direccion:"", municipio:"", municipioCustom:"", codigoPostal:"", referenciaCatastral:"", fechaVisita:"", observaciones:""},
-    checklist:{tipoViv:"", reformaImportante:false, reformaAnyo:"", posAislamiento:"", murosEspesor:"", carpinteria:"", acristalamiento:"", permeabilidad:"", techo:"", techoAislada:"", suelo:"", calTipo:"", calComb:"", calDist:"", calAntig:"", calPct:"", refTipo:"", refComb:"", refAntig:"", refPct:"", acsTipo:"", acsModalidad:"", acsAcum:"", acsComb:"", acsMixta:false, renPaneles:false, renPotencia:"", firmaReq:false, observaciones:""},
-    fotos:{fachada:[], detalle:[], placas:[], croquisExtra:[], firma:""},
+    checklist:{tipoViv:"", reformaImportante:false, reformaAnyo:"", posAislamiento:"", murosEspesor:"", carpinteria:"", acristalamiento:"", permeabilidad:"", techo:"", techoAislada:"", suelo:"", calTipo:"", calComb:"", calDist:"", calAntig:"", calPct:"", refTipo:"", refComb:"", refAntig:"", refPct:"", acsTipo:"", acsModalidad:"", acsAcum:"", acsComb:"", acsMixta:false, renPaneles:false, renPotencia:"", firmaReq:false, observaciones:"",
+      ...Object.fromEntries(Object.keys(CAMPOS_CK).map(k=>[k,""]))},
+    fotos:{fachada:[], plano:[], detalle:[], placas:[], croquisExtra:[], firma:""},
     croquis:null, drive:{folderId:"", url:"", subido:"", fecha:""}, pendienteSync:false };
 }
 // Completa expedientes que llegan de la hoja (o de versiones viejas) con la estructura actual
@@ -107,7 +117,7 @@ function normalizar(exp){
   exp.datos=Object.assign(base.datos, exp.datos||{});
   exp.checklist=Object.assign(base.checklist, exp.checklist||{});
   const f=exp.fotos||{};
-  exp.fotos={ fachada:[].concat(f.fachada||[]).filter(Boolean), detalle:[].concat(f.detalle||[]).filter(Boolean), placas:[].concat(f.placas||[]).filter(Boolean), croquisExtra:[].concat(f.croquisExtra||[], f.croq1||[], f.croq2||[]).filter(Boolean), firma:f.firma||"" };
+  exp.fotos={ fachada:[].concat(f.fachada||[]).filter(Boolean), plano:[].concat(f.plano||[]).filter(Boolean), detalle:[].concat(f.detalle||[]).filter(Boolean), placas:[].concat(f.placas||[]).filter(Boolean), croquisExtra:[].concat(f.croquisExtra||[], f.croq1||[], f.croq2||[]).filter(Boolean), firma:f.firma||"" };
   if(!exp.drive) exp.drive=base.drive;
   if(exp.croquis===undefined) exp.croquis=null;
   return exp;
@@ -201,8 +211,8 @@ async function sincronizar(){
 const RANGO={pendiente:1, visitado:2, enviado:3};
 function expVacio(e){
   const d=e.datos||{}, f=e.fotos||{};
-  return !d.direccion && !d.nombre && !e.numExp && !(e.croquis&&e.croquis.tramos&&e.croquis.tramos.length) &&
-    !["fachada","detalle","placas","croquisExtra"].some(k=>(f[k]||[]).length);
+  return !d.direccion && !d.nombre && !e.numExp && !window.Croquis.hayDibujo(e) &&
+    !Object.keys(GRUPOS_FOTO).some(k=>(f[k]||[]).length);
 }
 function claveGrupo(e){ return e.solicitudId ? "s:"+e.solicitudId : "i:"+e.id; }
 function masAvanzado(a,b){
@@ -360,6 +370,9 @@ function rellenarChecklist(exp){
   $("c-carpinteria").value=c.carpinteria||""; $("c-acristalamiento").value=c.acristalamiento||"";
   $("c-permeabilidad").value=c.permeabilidad||"";
   $("c-techo").value=c.techo||""; $("c-techoAislada").value=c.techoAislada||""; $("c-suelo").value=c.suelo||"";
+  if(c.calTipo==="Suelo radiante"){ c.calTipo=""; if(!c.calDist) c.calDist="Suelo radiante"; }   // antes era un "sistema"; ahora va en distribución
+  Object.keys(CAMPOS_CK).forEach(k=>{ $(CAMPOS_CK[k]).value=c[k]||""; });
+  toggleLocal(); toggleBajoCub(); toggleRenTipo();
   $("c-calTipo").value=c.calTipo||""; $("c-calComb").value=c.calComb||""; $("c-calDist").value=c.calDist||""; $("c-calAntig").value=c.calAntig||""; $("c-calPct").value=c.calPct||"";
   toggleCalef();
   $("c-refTipo").value=c.refTipo||""; $("c-refComb").value=c.refComb||""; $("c-refAntig").value=c.refAntig||""; $("c-refPct").value=c.refPct||"";
@@ -387,6 +400,7 @@ function leerChecklist(exp){
   c.renPaneles=$("c-renPaneles").checked; c.renPotencia=$("c-renPotencia").value;
   c.firmaReq=$("c-firmaReq").checked;
   c.observaciones=$("c-obs").value.trim();
+  Object.keys(CAMPOS_CK).forEach(k=>{ c[k]=String($(CAMPOS_CK[k]).value||"").trim(); });
   if(c.firmaReq && state.firma.hasDrawn){ const cv=$("firma-canvas"); if(cv) exp.fotos.firma=cv.toDataURL("image/png"); }
   else if(!c.firmaReq) exp.fotos.firma="";
 }
@@ -394,6 +408,9 @@ function toggleCalef(){ $("c-calef-detalle").style.display=$("c-calTipo").value=
 function toggleRefri(){ $("c-refri-detalle").style.display=$("c-refTipo").value==="No tiene instalada"?"none":"block"; }
 function toggleReforma(){ $("c-reformaAnyo-row").style.display=$("c-reforma").checked?"block":"none"; }
 function toggleRen(){ $("c-ren-row").style.display=$("c-renPaneles").checked?"block":"none"; }
+function toggleLocal(){ $("c-local-box").style.display=$("c-tipoViv").value==="Local"?"block":"none"; }
+function toggleBajoCub(){ $("c-bajocub-box").style.display=$("c-techo").value==="Bajo cubierta no habitable"?"block":"none"; }
+function toggleRenTipo(){ const t=$("c-renTipo").value; $("c-renFV-box").style.display=(t==="Solar térmica")?"none":"block"; $("c-renST-box").style.display=(t==="Solar térmica"||t==="Las dos")?"block":"none"; }
 function toggleFirma(){ const on=$("c-firmaReq").checked; $("firma-box").style.display=on?"block":"none"; if(on) setTimeout(()=>initFirmaCanvas(),50); }
 function irAChecklist(){
   go("checklist");
@@ -442,7 +459,7 @@ function renderGaleria(key){
 }
 async function abrirCamara(key,title){
   state.camera.activeKey=key; state.camera.n=0;
-  $("camera-title").textContent=title||"Capturar foto"; $("camera-count").textContent="Puedes hacer varias seguidas.";
+  $("camera-title").textContent=title||"Capturar foto"; $("camera-count").textContent=FOTO_UNICA[key]?"Solo una foto: sustituye a la anterior.":"Puedes hacer varias seguidas.";
   $("modal-camera").style.display="flex";
   try{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}}});
@@ -460,6 +477,7 @@ async function capturarFoto(){
   let w=video.videoWidth, h=video.videoHeight; const max=1600;
   if(w>h && w>max){ h=Math.round(h*max/w); w=max; } else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
   canvas.width=w; canvas.height=h; canvas.getContext("2d").drawImage(video,0,0,w,h);
+  if(FOTO_UNICA[key]){ exp.fotos[key]=[canvas.toDataURL("image/jpeg",0.85)]; await guardarExpedienteLocal(exp); if(navigator.vibrate) navigator.vibrate(30); toast("✓ Foto guardada"); cerrarCamara(); return; }
   exp.fotos[key].push(canvas.toDataURL("image/jpeg",0.85));
   await guardarExpedienteLocal(exp);
   state.camera.n++; $("camera-count").textContent="✓ "+state.camera.n+" foto(s) guardada(s). Sigue o pulsa Cerrar.";
@@ -477,9 +495,62 @@ function leerComoDataUrl(file){ return new Promise(res=>{ const r=new FileReader
 async function onFicherosElegidos(e){
   const key=state.fileKey, exp=state.expCurrent; const files=[...(e.target.files||[])];
   e.target.value=""; if(!key||!exp||!files.length) return;
+  if(FOTO_UNICA[key]){ files.splice(0, files.length-1); exp.fotos[key]=[]; }
   for(const f of files){ exp.fotos[key].push(f.type==="application/pdf" ? await leerComoDataUrl(f) : await redimensionar(f,1600,0.85)); }
   await guardarExpedienteLocal(exp); renderGaleria(key); toast(files.length+" archivo(s) añadido(s)");
 }
+
+// ---------------- Plano de situación: ortofoto PNOA (IGN) + parcelas del Catastro, a partir de la ref. catastral ----------------
+function cargarImagen(url){ return new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin="anonymous"; im.onload=()=>res(im); im.onerror=()=>rej(new Error("no responde "+url.split("/")[2])); im.src=url; }); }
+async function generarPlano(){
+  const exp=state.expCurrent; if(!exp) return;
+  if(state.pantalla==="checklist") leerChecklist(exp);
+  const rc=(exp.datos.referenciaCatastral||"").replace(/\s/g,"").toUpperCase();
+  if(rc.length<14){ toast("Falta la referencia catastral (pestaña Datos)",4000); return; }
+  if(!navigator.onLine){ toast("Sin conexión: genera el plano cuando tengas cobertura"); return; }
+  showSync("Generando plano de situación…");
+  try{
+    const r=await fetch("https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCoordenadas.svc/json/Consulta_CPMRC?RefCat="+encodeURIComponent(rc.slice(0,14))+"&SRS=EPSG:4326");
+    const j=await r.json();
+    const co=j&&j.Consulta_CPMRCResult&&j.Consulta_CPMRCResult.coordenadas&&j.Consulta_CPMRCResult.coordenadas.coord;
+    const g=co&&co[0]&&co[0].geo;
+    if(!g) throw new Error("el Catastro no encuentra la referencia "+rc);
+    const lon=parseFloat(g.xcen), lat=parseFloat(g.ycen);
+    // Ventana de 250 m de ancho centrada en la parcela (Web Mercator)
+    const R=6378137, x=R*lon*Math.PI/180, y=R*Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));
+    const W=1200, H=900, anchoM=250, k=1/Math.cos(lat*Math.PI/180), hw=anchoM/2*k, hh=hw*H/W;
+    const bbox=[x-hw,y-hh,x+hw,y+hh].map(v=>v.toFixed(2)).join(",");
+    const orto="https://www.ign.es/wms-inspire/pnoa-ma?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=OI.OrthoimageCoverage&STYLES=&CRS=EPSG:3857&BBOX="+bbox+"&WIDTH="+W+"&HEIGHT="+H+"&FORMAT=image/jpeg";
+    const cat="https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=Catastro&STYLES=&SRS=EPSG:3857&BBOX="+bbox+"&WIDTH="+W+"&HEIGHT="+H+"&FORMAT=image/png&TRANSPARENT=TRUE";
+    const [i1,i2]=await Promise.all([cargarImagen(orto),cargarImagen(cat)]);
+    const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const c=cv.getContext("2d");
+    c.drawImage(i1,0,0,W,H); c.drawImage(i2,0,0,W,H);
+    // Marca de la parcela
+    c.strokeStyle="#FF2A2A"; c.lineWidth=6; c.beginPath(); c.arc(W/2,H/2,26,0,7); c.stroke();
+    // Norte
+    c.fillStyle="rgba(255,255,255,.88)"; c.fillRect(W-74,14,60,74);
+    c.fillStyle="#22302D"; c.beginPath(); c.moveTo(W-44,22); c.lineTo(W-58,62); c.lineTo(W-44,54); c.lineTo(W-30,62); c.closePath(); c.fill();
+    c.font="700 20px Arial"; c.textAlign="center"; c.fillText("N",W-44,84);
+    // Escala gráfica de 50 m
+    const px50=50*W/anchoM;
+    c.fillStyle="rgba(255,255,255,.88)"; c.fillRect(14,H-112,px50+40,48);
+    c.fillStyle="#22302D"; c.fillRect(34,H-82,px50,8); c.fillStyle="#fff"; c.fillRect(34+px50/2,H-80,px50/2-2,4);
+    c.fillStyle="#22302D"; c.font="700 16px Arial"; c.textAlign="left"; c.fillText("0",30,H-88); c.textAlign="right"; c.fillText("50 m",34+px50+6,H-88);
+    // Pie
+    c.fillStyle="rgba(255,255,255,.92)"; c.fillRect(0,H-52,W,52);
+    c.fillStyle="#22302D"; c.textAlign="left"; c.font="700 18px Arial";
+    c.fillText("Ref. catastral "+rc+" · "+(exp.datos.direccion||"")+(muniDe(exp)?", "+muniDe(exp):""),14,H-28);
+    c.font="13px Arial"; c.fillStyle="#5C7370";
+    c.fillText("Ortofoto PNOA © Instituto Geográfico Nacional · Cartografía © Dirección General del Catastro",14,H-10);
+    exp.fotos.plano=[cv.toDataURL("image/jpeg",0.85)];
+    await guardarExpedienteLocal(exp); renderGaleria("plano"); hideSync(); toast("✓ Plano de situación generado");
+  }catch(e){ hideSync(); toast("No se pudo generar el plano: "+e.message,5000); }
+}
+
+// Textos cortos para PDF y correo
+function potTxt(kw,rend,etq){ return (kw?kw+" kW":"no visible")+(rend?" · "+(etq||"rend.")+" "+rend:""); }
+function renFVTxt(c){ return [c.renPotencia?c.renPotencia+" kWp":"", c.renNumPaneles?c.renNumPaneles+" paneles":"", c.renOrient?"orient. "+c.renOrient:"", c.renIncl?"incl. "+c.renIncl+"°":"", c.renBaterias?"baterías: "+c.renBaterias:""].filter(Boolean).join(" · ")||"—"; }
+function renSTTxt(c){ return [c.renCaptM2?c.renCaptM2+" m² captadores":"", c.renDeposito?"depósito "+c.renDeposito+" L":""].filter(Boolean).join(" · ")||"—"; }
 
 // ---------------- PDF del checklist ----------------
 async function generateChecklistPDF(exp){
@@ -498,10 +569,14 @@ async function generateChecklistPDF(exp){
   row("Dirección",(d.direccion||"")+(d.codigoPostal?", "+d.codigoPostal:"")); row("Municipio",muniDe(exp)); row("Cliente",d.nombre);
   row(d.tipoDocumento||"DNI",d.numeroDocumento); row("Teléfono",d.telefono); row("Email",d.email);
   row("Ref. catastral",d.referenciaCatastral); row("Fecha visita",d.fechaVisita); row("Tipo inmueble",c.tipoViv);
+  row("Posición",c.posicion); row("Nº plantas del edificio",c.numPlantas); row("Altura libre",c.alturaLibre?c.alturaLibre+" m (medida)":"2,70 m (por defecto)");
   row("Reforma importante", c.reformaImportante?("Sí — Año "+(c.reformaAnyo||"?")):"No"); y+=3;
-  title("ENVOLVENTE — MUROS / FACHADA"); row("Posibilidad aislamiento",c.posAislamiento); row("Espesor muros",c.murosEspesor?c.murosEspesor+" cm":""); y+=2;
+  if(c.tipoViv==="Local"){ title("LOCAL (TERCIARIO)"); row("Actividad",c.localActividad); row("Horario",c.localHorario); row("Iluminación",(c.localLuz||"")+(c.localLuminarias?" · "+c.localLuminarias+" luminarias aprox.":"")); y+=2; }
+  title("ENVOLVENTE — MUROS / FACHADA"); row("Tipo de fachada",c.tipoFachada); row("Posibilidad aislamiento",c.posAislamiento); row("Espesor muros",c.murosEspesor?c.murosEspesor+" cm":""); y+=2;
   title("ENVOLVENTE — HUECOS"); row("Carpintería (defecto)",c.carpinteria); row("Acristalamiento (defecto)",c.acristalamiento); row("Permeabilidad",c.permeabilidad); y+=2;
-  title("ENVOLVENTE — CUBIERTA Y SUELO"); row("Techo",(c.techo||"")+(c.techoAislada?" · "+c.techoAislada:"")); row("Suelo",c.suelo); y+=2;
+  title("ENVOLVENTE — CUBIERTA Y SUELO"); row("Techo",(c.techo||"")+(c.techoAislada?" · "+c.techoAislada:""));
+  if(c.techo==="Bajo cubierta no habitable") row("Bajo cubierta","aislado en: "+(c.bajocubAisl||"—")+" · ventilado: "+(c.bajocubVent||"—"));
+  row("Suelo",c.suelo); y+=2;
   if(window.Croquis.hayDibujo(exp)){
     const an=window.Croquis.analizar(exp);
     title("CROQUIS");
@@ -512,14 +587,14 @@ async function generateChecklistPDF(exp){
   }
   title("CALEFACCIÓN");
   if(c.calTipo==="No tiene instalada") row("Sistema","No tiene instalada");
-  else { row("Sistema",c.calTipo); row("Combustible",c.calComb); row("Distribución",c.calDist); row("Antigüedad",c.calAntig); row("% vivienda calefactada",c.calPct?c.calPct+" %":""); }
+  else { row("Sistema",c.calTipo); row("Combustible",c.calComb); row("Distribución",c.calDist); row("Antigüedad",c.calAntig); row("% vivienda calefactada",c.calPct?c.calPct+" %":""); row("Potencia (placa)",potTxt(c.calPot,c.calCop,"COP")); }
   y+=2; title("REFRIGERACIÓN");
   if(c.refTipo==="No tiene instalada") row("Sistema","No tiene instalada");
-  else { row("Tipo (distribución)",c.refTipo); row("Sistema / energía",c.refComb); row("Antigüedad",c.refAntig); row("% vivienda climatizada",c.refPct?c.refPct+" %":""); }
-  y+=2; title("ACS"); row("Tipo",c.acsTipo); row("Modalidad",c.acsModalidad); row("Acumulación",c.acsAcum); row("Combustible",c.acsComb); row("Mixta con calefacción",c.acsMixta?"Sí":"No");
+  else { row("Tipo (distribución)",c.refTipo); row("Sistema / energía",c.refComb); row("Antigüedad",c.refAntig); row("% vivienda climatizada",c.refPct?c.refPct+" %":""); row("Potencia (placa)",potTxt(c.refPot,c.refEer,"EER")); }
+  y+=2; title("ACS"); row("Tipo",c.acsTipo); row("Modalidad",c.acsModalidad); row("Acumulación",c.acsAcum); row("Combustible",c.acsComb); row("Mixta con calefacción",c.acsMixta?"Sí":"No"); row("Potencia (placa)",potTxt(c.acsPot));
   y+=2; title("ENERGÍAS RENOVABLES");
-  if(c.renPaneles){ row("Paneles solares","Sí"); row("Potencia instalada",c.renPotencia?c.renPotencia+" kW":""); } else row("Paneles solares","No dispone");
-  y+=2; title("FOTOS"); row("Fachada",exp.fotos.fachada.length); row("Detalle",exp.fotos.detalle.length); row("Placas de equipos",exp.fotos.placas.length);
+  if(c.renPaneles){ row("Paneles solares",c.renTipo||"Sí"); if(c.renTipo!=="Solar térmica"){ row("Fotovoltaica",renFVTxt(c)); } if(c.renTipo==="Solar térmica"||c.renTipo==="Las dos"){ row("Solar térmica",renSTTxt(c)); } } else row("Paneles solares","No dispone");
+  y+=2; title("FOTOS"); row("Fachada",exp.fotos.fachada.length); row("Plano de situación",exp.fotos.plano.length?"Sí":"No"); row("Detalle",exp.fotos.detalle.length); row("Placas de equipos",exp.fotos.placas.length);
   y+=2;
   if(c.observaciones){ title("OBSERVACIONES"); doc.setFontSize(9); doc.setFont("helvetica","normal"); const lines=doc.splitTextToSize(c.observaciones,pw); doc.text(lines,lm,y); y+=5*lines.length+2; }
   if(c.firmaReq && exp.fotos.firma){
@@ -542,7 +617,7 @@ function datosJson(exp){
     id:exp.id, numExp:exp.numExp||"", origen:exp.origen, solicitudId:exp.solicitudId||"", estado:exp.estado,
     datos:exp.datos, municipio:muniDe(exp), checklist:exp.checklist,
     croquis: window.Croquis.hayDibujo(exp) ? window.Croquis.analizar(exp) : null,
-    fotos:{ fachada:exp.fotos.fachada.length, detalle:exp.fotos.detalle.length, placas:exp.fotos.placas.length, croquisExtra:exp.fotos.croquisExtra.length, firma:!!exp.fotos.firma }
+    fotos:{ fachada:exp.fotos.fachada.length, plano:exp.fotos.plano.length, detalle:exp.fotos.detalle.length, placas:exp.fotos.placas.length, croquisExtra:exp.fotos.croquisExtra.length, firma:!!exp.fotos.firma }
   }, null, 2);
 }
 // Lista de ficheros del expediente: [{nombre, dataUrl|texto, mime}]
@@ -578,7 +653,7 @@ async function guardarEnDrive(exp){
     let fallos=[];
     for(let i=0;i<ficheros.length;i++){
       const f=ficheros[i];
-      showSync("Subiendo a Drive "+(i+1)+"/"+ficheros.length+" · "+f.nombre);
+      showSync("Subiendo a Drive…\n"+(i+1)+" de "+ficheros.length+"\n"+f.nombre+"\n\nNo cierres la app");
       let ok=false, intento=0;
       while(!ok && intento<3){
         intento++;
@@ -629,17 +704,20 @@ async function abrirPantallaEmail(){
   let croq="";
   if(window.Croquis.hayDibujo(exp)){
     const an=window.Croquis.analizar(exp);
-    croq="\n\nCROQUIS\n- Superficie del polígono: "+an.superficiePoligono_m2.toFixed(2)+" m²"+(an.poligonoCerrado?"":" (contorno sin cerrar)")+"\n- Huecos: "+an.huecos.length+"\n- Fachada neta por orientación: "+Object.keys(an.fachadasPorOrientacion).map(k=>k+" "+an.fachadasPorOrientacion[k].muroNeto_m2.toFixed(2)).join(" · ")+" m² (altura libre 2,70 m)";
+    croq="\n\nCROQUIS"+(an.numPlantas>1?" ("+an.numPlantas+" plantas: "+an.plantas.map(p=>p.nombre+" "+p.superficiePoligono_m2.toFixed(2)+" m²").join(" · ")+")":"")+"\n- Superficie del polígono"+(an.numPlantas>1?" (total)":"")+": "+an.superficiePoligono_m2.toFixed(2)+" m²"+(an.poligonoCerrado?"":" (contorno sin cerrar)")+"\n- Huecos: "+an.huecos.length+"\n- Fachada neta por orientación: "+Object.keys(an.fachadasPorOrientacion).map(k=>k+" "+an.fachadasPorOrientacion[k].muroNeto_m2.toFixed(2)).join(" · ")+" m² (altura libre "+an.alturaLibre_m.toFixed(2).replace(".",",")+" m)";
   }
-  $("e-body").value="Hola,\n\nAdjunto datos y documentación de la visita para el certificado energético:\n\nDATOS DEL INMUEBLE\n- Expediente: "+(exp.numExp||"—")+"\n- Cliente: "+exp.datos.nombre+"\n- Dirección: "+exp.datos.direccion+"\n- Municipio: "+muniStr+" (CP "+exp.datos.codigoPostal+")\n- Ref. catastral: "+exp.datos.referenciaCatastral+"\n- Teléfono: "+exp.datos.telefono+"\n- Fecha de visita: "+exp.datos.fechaVisita+(cfg.tecnico?"\n- Visita realizada por: "+cfg.tecnico:"")+"\n- Tipo inmueble: "+c.tipoViv+(c.reformaImportante?"\n- Reforma importante: Sí (año "+(c.reformaAnyo||"?")+")":"")+
-    "\n\nENVOLVENTE\n- Aislamiento posible en fachada: "+(c.posAislamiento||"—")+"\n- Espesor muros: "+(c.murosEspesor||"—")+" cm\n- Carpintería: "+(c.carpinteria||"—")+" · Acristalamiento: "+(c.acristalamiento||"—")+" · Permeabilidad: "+(c.permeabilidad||"—")+"\n- Techo: "+(c.techo||"—")+(c.techoAislada?" ("+c.techoAislada+")":"")+"\n- Suelo: "+(c.suelo||"—")+
+  $("e-body").value="Hola,\n\nAdjunto datos y documentación de la visita para el certificado energético:\n\nDATOS DEL INMUEBLE\n- Expediente: "+(exp.numExp||"—")+"\n- Cliente: "+exp.datos.nombre+"\n- Dirección: "+exp.datos.direccion+"\n- Municipio: "+muniStr+" (CP "+exp.datos.codigoPostal+")\n- Ref. catastral: "+exp.datos.referenciaCatastral+"\n- Teléfono: "+exp.datos.telefono+"\n- Fecha de visita: "+exp.datos.fechaVisita+(cfg.tecnico?"\n- Visita realizada por: "+cfg.tecnico:"")+"\n- Tipo inmueble: "+c.tipoViv+(c.posicion?" · "+c.posicion:"")+(c.numPlantas?" · edificio de "+c.numPlantas+" plantas":"")+(c.reformaImportante?"\n- Reforma importante: Sí (año "+(c.reformaAnyo||"?")+")":"")+
+    (c.alturaLibre?"\n- Altura libre medida: "+c.alturaLibre+" m":"")+
+    (c.tipoViv==="Local"?"\n- Local: "+(c.localActividad||"—")+" · horario "+(c.localHorario||"—")+" · iluminación "+(c.localLuz||"—")+(c.localLuminarias?" ("+c.localLuminarias+" luminarias aprox.)":""):"")+
+    "\n\nENVOLVENTE\n- Tipo de fachada: "+(c.tipoFachada||"—")+"\n- Aislamiento posible en fachada: "+(c.posAislamiento||"—")+"\n- Espesor muros: "+(c.murosEspesor||"—")+" cm\n- Carpintería: "+(c.carpinteria||"—")+" · Acristalamiento: "+(c.acristalamiento||"—")+" · Permeabilidad: "+(c.permeabilidad||"—")+"\n- Techo: "+(c.techo||"—")+(c.techoAislada?" ("+c.techoAislada+")":"")+
+    (c.techo==="Bajo cubierta no habitable"?" · aislado en: "+(c.bajocubAisl||"—")+" · ventilado: "+(c.bajocubVent||"—"):"")+"\n- Suelo: "+(c.suelo||"—")+
     croq+
-    "\n\nINSTALACIONES\n- Calefacción: "+(c.calTipo||"—")+(c.calTipo&&c.calTipo!=="No tiene instalada"?" · "+(c.calComb||"")+" · "+(c.calDist||"")+" · "+(c.calAntig||"")+" · "+(c.calPct||0)+"% vivienda":"")+
-    "\n- Refrigeración: "+(c.refTipo||"—")+(c.refTipo&&c.refTipo!=="No tiene instalada"?" · "+(c.refComb||"")+" · "+(c.refAntig||"")+" · "+(c.refPct||0)+"% vivienda":"")+
-    "\n- ACS: "+(c.acsTipo||"—")+(c.acsModalidad?" · "+c.acsModalidad:"")+(c.acsAcum?" · "+c.acsAcum:"")+(c.acsComb?" · "+c.acsComb:"")+(c.acsMixta?" · mixta con calefacción":"")+
-    "\n- Renovables: "+(c.renPaneles?"Paneles "+(c.renPotencia||"?")+" kW":"No dispone")+
+    "\n\nINSTALACIONES\n- Calefacción: "+(c.calTipo||"—")+(c.calTipo&&c.calTipo!=="No tiene instalada"?" · "+(c.calComb||"")+" · "+(c.calDist||"")+" · "+(c.calAntig||"")+" · "+(c.calPct||0)+"% vivienda"+(c.calPot||c.calCop?" · "+potTxt(c.calPot,c.calCop,"COP"):""):"")+
+    "\n- Refrigeración: "+(c.refTipo||"—")+(c.refTipo&&c.refTipo!=="No tiene instalada"?" · "+(c.refComb||"")+" · "+(c.refAntig||"")+" · "+(c.refPct||0)+"% vivienda"+(c.refPot||c.refEer?" · "+potTxt(c.refPot,c.refEer,"EER"):""):"")+
+    "\n- ACS: "+(c.acsTipo||"—")+(c.acsModalidad?" · "+c.acsModalidad:"")+(c.acsAcum?" · "+c.acsAcum:"")+(c.acsComb?" · "+c.acsComb:"")+(c.acsMixta?" · mixta con calefacción":"")+(c.acsPot?" · "+c.acsPot+" kW":"")+
+    "\n- Renovables: "+(c.renPaneles?(c.renTipo||"Paneles")+(c.renTipo!=="Solar térmica"?" · FV: "+renFVTxt(c):"")+(c.renTipo==="Solar térmica"||c.renTipo==="Las dos"?" · Térmica: "+renSTTxt(c):""):"No dispone")+
     "\n\nOBSERVACIONES\n"+(c.observaciones||"—")+
-    "\n\nSe adjuntan: checklist en PDF, croquis (PDF, DXF y JSON), fotos"+(exp.fotos.placas.length?" (incluidas placas de equipos)":"")+(c.firmaReq?" y firma del titular":"")+"."+
+    "\n\nSe adjuntan: checklist en PDF, croquis (PDF, DXF y JSON)"+(exp.fotos.plano.length?", plano de situación":"")+", fotos"+(exp.fotos.placas.length?" (incluidas placas de equipos)":"")+(c.firmaReq?" y firma del titular":"")+"."+
     (exp.drive&&exp.drive.url?"\nCarpeta del expediente: "+exp.drive.url:"")+
     "\n\n"+(cfg.firma||"");
   go("email");
@@ -707,7 +785,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=2"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=3"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
@@ -749,6 +827,8 @@ async function init(){
 
   $("c-reforma").onchange=toggleReforma; $("c-calTipo").onchange=toggleCalef; $("c-refTipo").onchange=toggleRefri;
   $("c-renPaneles").onchange=toggleRen; $("c-firmaReq").onchange=toggleFirma;
+  $("c-tipoViv").onchange=toggleLocal; $("c-techo").onchange=toggleBajoCub; $("c-renTipo").onchange=toggleRenTipo;
+  $("btn-plano").onclick=()=>generarPlano();
   $("btn-firma-clear").onclick=clearFirma;
   $("f-muni").onchange=onCambiarMuni;
 

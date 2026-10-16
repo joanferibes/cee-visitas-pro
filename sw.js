@@ -1,15 +1,15 @@
-// CEE Visitas Pro · Service Worker v2
-const CACHE_NAME = "cee-visitas-pro-v2";
+// CEE Visitas Pro · Service Worker v3
+const CACHE_NAME = "cee-visitas-pro-v3";
 const URLS = [
   "./",
   "./index.html",
-  "./app.js?v=2",
-  "./croquis.js?v=2",
-  "./config.js?v=2",
-  "./style.css?v=2",
+  "./app.js?v=3",
+  "./croquis.js?v=3",
+  "./config.js?v=3",
+  "./style.css?v=3",
   "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
+  "./icon-pro-192.png",
+  "./icon-pro-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
 ];
 

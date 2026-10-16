@@ -1,14 +1,15 @@
 {
-  "name": "CEE Visitas Pro — Joanfe Ribes",
-  "short_name": "CEE Pro",
+  "id": "/cee-visitas-pro/",
+  "name": "CEE VISITAS PRO",
+  "short_name": "CEE Visitas Pro",
   "start_url": "/cee-visitas-pro/",
   "scope": "/cee-visitas-pro/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#4A8A80",
+  "background_color": "#1F4E5A",
+  "theme_color": "#1F4E5A",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "icon-pro-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-pro-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }

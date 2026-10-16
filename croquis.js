@@ -29,11 +29,22 @@ let view = {s:60, cx:0, cy:0};
 let cv, ctx, iniciado = false;
 
 // ---------- Modelo ----------
-function vacio(){ return { norte:0, libre:false, tramos:[] }; }
-function modelo(){ if(!exp.croquis) exp.croquis = vacio(); return exp.croquis; }
+// exp.croquis = { norte, libre, actual, plantas:[ {nombre, tramos:[…]} ] }  (los croquis viejos tenían tramos sueltos: se migran)
+function vacio(){ return { norte:0, libre:false, actual:0, plantas:[{nombre:'Planta baja', tramos:[]}] }; }
+function migrar(c){
+  if(!c.plantas){ c.plantas=[{nombre:'Planta baja', tramos:c.tramos||[]}]; delete c.tramos; }
+  if(!(c.actual>=0 && c.actual<c.plantas.length)) c.actual=0;
+  return c;
+}
+function modelo(){ if(!exp.croquis) exp.croquis = vacio(); return migrar(exp.croquis); }
+function planta(){ const m=modelo(); return m.plantas[m.actual]; }
+// Planta que se ve en gris debajo de la actual (la anterior de la lista)
+function plantaFantasma(){ const m=modelo(); return m.actual>0 ? m.plantas[m.actual-1] : null; }
+function plantasDe(e){ const c=e&&e.croquis; if(!c) return []; return c.plantas || [{nombre:'Planta baja', tramos:c.tramos||[]}]; }
 function matDef(e){ const c=(e||exp).checklist||{}; return MATERIALES.includes(c.carpinteria) ? c.carpinteria : 'Aluminio'; }
 function vidDef(e){ const c=(e||exp).checklist||{}; return VIDRIOS.includes(c.acristalamiento) ? c.acristalamiento : 'Doble'; }
-function hayDibujo(e){ const m=(e||exp)&&(e||exp).croquis; return !!(m && m.tramos && m.tramos.some(t=>t.segs.length)); }
+function alturaDe(e){ const v=parseFloat(String(((e||exp).checklist||{}).alturaLibre||'').replace(',','.')); return v>1.5&&v<6 ? v : ALTURA_LIBRE; }
+function hayDibujo(e){ return plantasDe(e||exp).some(p=>p.tramos.some(t=>t.segs.length)); }
 function guardar(){ if(onChange) onChange(); }
 
 function tituloDe(e){
@@ -84,7 +95,31 @@ function txtHueco(e,s,tag){
 
 // ---------- Análisis (lo que usa la tarea nocturna) ----------
 function analizar(e){
-  const m=e.croquis||vacio(); const tags=etiquetasHuecos(m); const norte=m.norte||0;
+  const c=e.croquis?migrar(e.croquis):vacio(), norte=c.norte||0, alt=alturaDe(e);
+  const plantas=c.plantas.filter(p=>p.tramos.some(t=>t.segs.length)).map(p=>Object.assign({nombre:p.nombre}, analizarPlanta(e,p,norte,alt)));
+  const porOri={};
+  plantas.forEach(p=>Object.keys(p.fachadasPorOrientacion).forEach(k=>{
+    const o=porOri[k]||(porOri[k]={longitud_m:0, muroBruto_m2:0, huecos_m2:0, muroNeto_m2:0}), q=p.fachadasPorOrientacion[k];
+    ['longitud_m','muroBruto_m2','huecos_m2','muroNeto_m2'].forEach(f=>o[f]=+(o[f]+q[f]).toFixed(2));
+  }));
+  const suma=f=>+plantas.reduce((s,p)=>s+p[f],0).toFixed(2);
+  const sup=suma('superficiePoligono_m2');
+  return {
+    version:2, generado:new Date().toISOString(),
+    numExp:e.numExp||'', direccion:tituloDe(e), fechaVisita:e.datos.fechaVisita||'',
+    alturaLibre_m:alt, norte_grados:+(norte).toFixed(1),
+    carpinteriaDefecto:matDef(e), vidrioDefecto:vidDef(e),
+    numPlantas:plantas.length,
+    poligonoCerrado: plantas.length>0 && plantas.every(p=>p.poligonoCerrado),
+    superficiePoligono_m2:sup, superficieUtil_m2:Math.round(sup),
+    longitudTotal_m:suma('longitudTotal_m'), medianera_m:suma('medianera_m'), zonaComun_m:suma('zonaComun_m'),
+    fachadasPorOrientacion:porOri,
+    huecos:[].concat(...plantas.map(p=>p.huecos.map(h=>Object.assign({planta:p.nombre},h)))),
+    plantas
+  };
+}
+function analizarPlanta(e, m, norte, alt){
+  const tags=etiquetasHuecos(m);
   const porOri={}; DIRS.forEach(d=>porOri[d]={longitud_m:0, muroBruto_m2:0, huecos_m2:0, muroNeto_m2:0});
   let lMed=0,lCom=0,per=0, sup=0; const huecos=[], tramos=[]; let cerrado=true;
   m.tramos.forEach((t,ti)=>{
@@ -102,11 +137,11 @@ function analizar(e){
       const item={ tipo:s.kind, longitud_m:+s.len.toFixed(3), zona, orientacion:ori, rumbo_grados:+gr.toFixed(1) };
       if(s.kind==='pared'){
         if(zona==='med') lMed+=s.len; else if(zona==='com') lCom+=s.len;
-        else { porOri[ori].longitud_m+=s.len; porOri[ori].muroBruto_m2+=s.len*ALTURA_LIBRE; }
+        else { porOri[ori].longitud_m+=s.len; porOri[ori].muroBruto_m2+=s.len*alt; }
       } else {
         const a=s.len*s.alto, tag=tags.get(ti+'-'+si);
         Object.assign(item,{ etiqueta:tag, alto_m:+s.alto.toFixed(3), superficie_m2:+a.toFixed(3), material:s.mat||matDef(e), vidrio:s.vid||vidDef(e) });
-        porOri[ori].longitud_m+=s.len; porOri[ori].muroBruto_m2+=s.len*ALTURA_LIBRE; porOri[ori].huecos_m2+=a;
+        porOri[ori].longitud_m+=s.len; porOri[ori].muroBruto_m2+=s.len*alt; porOri[ori].huecos_m2+=a;
         huecos.push({ etiqueta:tag, tipo:s.kind==='ventana'?'Ventana':'Puerta', ancho_m:+s.len.toFixed(3), alto_m:+s.alto.toFixed(3), superficie_m2:+a.toFixed(3), material:s.mat||matDef(e), vidrio:s.vid||vidDef(e), orientacion:ori });
       }
       segs.push(item);
@@ -119,10 +154,6 @@ function analizar(e){
     ['longitud_m','muroBruto_m2','huecos_m2','muroNeto_m2'].forEach(c=>o[c]=+o[c].toFixed(2));
   });
   return {
-    version:1, generado:new Date().toISOString(),
-    numExp:e.numExp||'', direccion:tituloDe(e), fechaVisita:e.datos.fechaVisita||'',
-    alturaLibre_m:ALTURA_LIBRE, norte_grados:+(norte).toFixed(1),
-    carpinteriaDefecto:matDef(e), vidrioDefecto:vidDef(e),
     poligonoCerrado: cerrado && tramos.length>0,
     superficiePoligono_m2:+sup.toFixed(2), superficieUtil_m2:Math.round(sup),
     longitudTotal_m:+per.toFixed(2), medianera_m:+lMed.toFixed(2), zonaComun_m:+lCom.toFixed(2),
@@ -144,7 +175,8 @@ function redim(){
 }
 function ajustarVista(){
   const W=cv.width/devicePixelRatio, H=cv.height/devicePixelRatio;
-  const b=bboxDe(modelo());
+  const g=plantaFantasma();
+  const b=bboxDe({tramos:planta().tramos.concat(g?g.tramos:[])});
   if(!b){ view={s:60,cx:0,cy:0}; return; }
   // margen para cotas, proporcional en lienzos pequeños (móvil en horizontal): nunca escala negativa
   const m=Math.min(70, W*0.18, H*0.18), w=Math.max(b.x1-b.x0,0.5), h=Math.max(b.y1-b.y0,0.5);
@@ -161,7 +193,14 @@ function dibujar(){
     for(let x=(W/2-view.cx*view.s)%paso;x<W;x+=paso){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
     for(let y=(H/2-view.cy*view.s)%paso;y<H;y+=paso){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   }
-  const m=modelo(), tags=etiquetasHuecos(m);
+  const raiz=modelo(), m=planta(), tags=etiquetasHuecos(m), g=plantaFantasma();
+  if(g){
+    ctx.save(); ctx.strokeStyle='#B5C2BF'; ctx.lineWidth=2.5; ctx.setLineDash([6,5]);
+    g.tramos.forEach(t=>{ const pts=puntosTramo(t); t.segs.forEach((s,si)=>{ const a=w2s(pts[si]), b=w2s(pts[si+1]); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }); });
+    ctx.setLineDash([]); ctx.fillStyle='#B5C2BF';
+    g.tramos.forEach(t=>puntosTramo(t).forEach(p=>{ const q=w2s(p); ctx.beginPath(); ctx.arc(q[0],q[1],3,0,7); ctx.fill(); }));
+    ctx.restore();
+  }
   m.tramos.forEach((t,ti)=>{
     const pts=puntosTramo(t);
     t.segs.forEach((s,si)=>{
@@ -186,8 +225,11 @@ function dibujar(){
     ctx.strokeStyle='#4A8A80'; ctx.setLineDash([7,5]); ctx.lineWidth=2.5;
     const a=trazo.pts[0], b=trazo.fin; ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke(); ctx.setLineDash([]);
   }
-  $('hint').style.display = hayDibujo() && !pendienteNuevoTramo ? 'none' : 'block';
-  if(hayDibujo()) dibujarNorteEn(ctx, W-34, 38, 20, m.norte||0);
+  const plantaVacia=!m.tramos.some(t=>t.segs.length);
+  if(plantaVacia && !pendienteNuevoTramo) $('hint').textContent = g ? 'En gris, '+g.nombre.toLowerCase()+'. Empieza a dibujar desde una de sus esquinas para que coincidan.' : 'Dibuja con el dedo la dirección del primer tramo';
+  $('hint').style.display = !plantaVacia && !pendienteNuevoTramo ? 'none' : 'block';
+  if(hayDibujo()) dibujarNorteEn(ctx, W-34, 38, 20, raiz.norte||0);
+  $('bPlantaTxt').textContent=m.nombre;
   actualizarTotal();
 }
 function dibujarNorteEn(c, cx, cy, r, norteDeg){
@@ -213,10 +255,11 @@ function etiquetaLinea(a,b,txt,col,negrita,lado){
 }
 function actualizarTotal(){
   let tot=0,nv=0,np=0;
-  modelo().tramos.forEach(t=>t.segs.forEach(s=>{tot+=s.len; if(s.kind==='ventana')nv++; if(s.kind==='puerta')np++;}));
+  const p=planta();
+  p.tramos.forEach(t=>t.segs.forEach(s=>{tot+=s.len; if(s.kind==='ventana')nv++; if(s.kind==='puerta')np++;}));
   const bar=$('totalBar');
-  if(tot>0){ const an=analizar(exp); bar.style.display='block';
-    bar.textContent='Σ '+fmt(tot)+' m · '+nv+' V · '+np+' P'+(an.superficiePoligono_m2?' · '+fmt(an.superficiePoligono_m2)+' m²':''); }
+  if(tot>0){ const an=analizarPlanta(exp,p,modelo().norte||0,alturaDe()); bar.style.display='block';
+    bar.textContent=(modelo().plantas.length>1?p.nombre+' · ':'')+'Σ '+fmt(tot)+' m · '+nv+' V · '+np+' P'+(an.superficiePoligono_m2?' · '+fmt(an.superficiePoligono_m2)+' m²':''); }
   else bar.style.display='none';
 }
 
@@ -237,12 +280,18 @@ function engancharLienzo(){
     const a=trazo.pts[0], b=trazo.fin, d=Math.hypot(b[0]-a[0],b[1]-a[1]);
     dibujar(); if(d<25) return;
     strokeAng=snap(Math.atan2(b[1]-a[1],b[0]-a[0]));
-    const m=modelo();
-    if(m.tramos.length===0) strokeOrigen=[0,0];
+    const m=planta(), g=plantaFantasma();
+    if(m.tramos.length===0) strokeOrigen = g ? enganchaFantasma(a,g) : [0,0];
     else if(pendienteNuevoTramo) strokeOrigen=s2w(a);
     else strokeOrigen=null;
     abrirSeg();
   });
+}
+// Primer punto de una planta nueva: se pega a la esquina más cercana de la planta de abajo (si está a menos de 30 px)
+function enganchaFantasma(pPantalla, g){
+  let mejor=null, dMin=30;
+  g.tramos.forEach(t=>puntosTramo(t).forEach(p=>{ const q=w2s(p), d=Math.hypot(q[0]-pPantalla[0],q[1]-pPantalla[1]); if(d<dMin){ dMin=d; mejor=p.slice(); } }));
+  return mejor || s2w(pPantalla);
 }
 
 // ---------- Hoja de segmento ----------
@@ -278,7 +327,7 @@ function guardarSeg(){
     if(!(alto>0)){ $('inAlto').focus(); return; }
     seg.alto=alto; seg.mat=$('inMat').value; seg.vid=$('inVid').value;
   } else seg.zona=zonaSel;
-  const m=modelo();
+  const m=planta();
   if(editando){ const s=m.tramos[editando.t].segs[editando.s]; seg.ang=s.ang; if(s.cierre) seg.cierre=true; m.tramos[editando.t].segs[editando.s]=seg; }
   else {
     if(strokeOrigen!==null){ m.tramos.push({origin:strokeOrigen,segs:[]}); pendienteNuevoTramo=false; }
@@ -290,16 +339,16 @@ function guardarSeg(){
 
 // ---------- Botones ----------
 function deshacer(){
-  const m=modelo();
+  const m=planta();
   for(let i=m.tramos.length-1;i>=0;i--){
-    if(m.tramos[i].segs.length){ m.tramos[i].segs.pop(); if(!m.tramos[i].segs.length&&i>0) m.tramos.pop(); break; }
+    if(m.tramos[i].segs.length){ m.tramos[i].segs.pop(); if(!m.tramos[i].segs.length) m.tramos.pop(); break; }
     else m.tramos.pop();
   }
   ajustarVista(); dibujar(); guardar();
 }
 function nuevoTramo(){ pendienteNuevoTramo=true; $('hint').style.display='block'; $('hint').textContent='Dibuja el nuevo tramo donde quieras: empezará en un punto independiente'; }
 function cerrarPoli(){
-  const m=modelo(), t=m.tramos[m.tramos.length-1];
+  const m=planta(), t=m.tramos[m.tramos.length-1];
   if(!t||t.segs.length<2){ alert('Necesitas al menos dos tramos para cerrar.'); return; }
   const pts=puntosTramo(t), ini=pts[0], fin=pts[pts.length-1];
   const dx=ini[0]-fin[0], dy=ini[1]-fin[1], len=Math.hypot(dx,dy);
@@ -313,14 +362,15 @@ function setLibre(v){ anguloLibre=v; modelo().libre=v; $('aSnap').classList.togg
 // ---------- Lista ----------
 function abrirLista(){
   const cont=$('listaSegs'); cont.innerHTML='';
-  const m=modelo(), tags=etiquetasHuecos(m); let n=0;
+  const m=planta(), tags=etiquetasHuecos(m), norte=modelo().norte||0; let n=0;
   const zonaTxt={ext:'exterior',med:'medianera',com:'z. común'};
+  $('listaTitulo').textContent='Tramos medidos'+(modelo().plantas.length>1?' · '+m.nombre:'');
   m.tramos.forEach((t,ti)=>{
     const pts=puntosTramo(t), horario=areaSigno(pts)>0;
     t.segs.forEach((s,si)=>{
       n++;
       const div=document.createElement('div'); div.className='filaSeg';
-      const ne=normalExterior(pts[si],pts[si+1],horario), ori=cardinal(rumbo(ne[0],ne[1],m.norte||0));
+      const ne=normalExterior(pts[si],pts[si+1],horario), ori=cardinal(rumbo(ne[0],ne[1],norte));
       const desc = s.kind==='pared' ? 'Pared · '+fmt(s.len)+' m'
         : tags.get(ti+'-'+si)+' '+(s.kind==='ventana'?'Ventana':'Puerta')+' · '+fmt(s.len)+'×'+fmt(s.alto)+' m';
       const sub = s.kind==='pared'
@@ -334,19 +384,48 @@ function abrirLista(){
     });
   });
   if(!n) cont.innerHTML='<p class="muted">Aún no hay tramos.</p>';
-  const an=analizar(exp);
+  const an=analizarPlanta(exp,m,norte,alturaDe()), tot=analizar(exp);
   $('resumenCroquis').innerHTML = n ? ('Superficie del polígono: <b>'+fmt(an.superficiePoligono_m2)+' m²</b>'+(an.poligonoCerrado?'':' (contorno sin cerrar)')+
+    (tot.numPlantas>1?'<br>Total '+tot.numPlantas+' plantas: <b>'+fmt(tot.superficiePoligono_m2)+' m²</b>':'')+
     '<br>Fachadas: '+Object.keys(an.fachadasPorOrientacion).map(k=>k+' '+fmt(an.fachadasPorOrientacion[k].muroNeto_m2)+' m²').join(' · ')+
-    '<br>Altura libre de cálculo: '+fmt(ALTURA_LIBRE)+' m') : '';
+    '<br>Altura libre de cálculo: '+fmt(alturaDe())+' m') : '';
   $('veloLista').classList.add('abierto');
 }
 function editarSeg(ti,si){
-  const s=modelo().tramos[ti].segs[si];
+  const s=planta().tramos[ti].segs[si];
   editando={t:ti,s:si}; setTipo(s.kind); setZona(s.zona||'ext');
   $('segTitulo').textContent='Editar tramo';
   $('inLong').value=s.len; $('inAlto').value=s.alto||''; $('inMat').value=s.mat||matDef(); $('inVid').value=s.vid||vidDef();
   $('laserHint').classList.toggle('visible', !!btCar);
   $('veloSeg').classList.add('abierto');
+}
+
+// ---------- Plantas ----------
+function abrirPlantas(){
+  const m=modelo(), cont=$('listaPlantas'); cont.innerHTML='';
+  m.plantas.forEach((p,i)=>{
+    const div=document.createElement('div'); div.className='filaSeg'+(i===m.actual?' actual':'');
+    const sup=analizarPlanta(exp,p,m.norte||0,alturaDe()).superficiePoligono_m2;
+    div.innerHTML='<span class="num">'+(i+1)+'</span><span class="txt">'+p.nombre.replace(/</g,'&lt;')+'<small>'+(sup?fmt(sup)+' m²':(p.tramos.some(t=>t.segs.length)?'contorno sin cerrar':'sin dibujar'))+(i===m.actual?' · la que estás dibujando':'')+'</small></span>';
+    div.querySelector('.txt').onclick=()=>irAPlanta(i);
+    const bE=document.createElement('button'); bE.textContent='✏️'; bE.title='Cambiar nombre';
+    bE.onclick=()=>{ const n=prompt('Nombre de la planta',p.nombre); if(n&&n.trim()){ p.nombre=n.trim(); guardar(); dibujar(); abrirPlantas(); } };
+    const bX=document.createElement('button'); bX.textContent='🗑️'; bX.title='Borrar planta';
+    bX.onclick=()=>{
+      if(m.plantas.length===1){ alert('Tiene que quedar al menos una planta.'); return; }
+      if(!confirm('¿Borrar '+p.nombre+' y todo lo dibujado en ella?')) return;
+      m.plantas.splice(i,1); if(m.actual>=m.plantas.length) m.actual=m.plantas.length-1; else if(m.actual>i) m.actual--;
+      guardar(); ajustarVista(); dibujar(); abrirPlantas();
+    };
+    div.appendChild(bE); div.appendChild(bX); cont.appendChild(div);
+  });
+  $('veloPlantas').classList.add('abierto');
+}
+function irAPlanta(i){ const m=modelo(); m.actual=i; pendienteNuevoTramo=false; $('veloPlantas').classList.remove('abierto'); guardar(); ajustarVista(); dibujar(); }
+function anadirPlanta(){
+  const m=modelo(), n=m.plantas.length;
+  m.plantas.push({nombre: n===0?'Planta baja':'Planta '+n, tramos:[]});
+  irAPlanta(m.plantas.length-1);
 }
 
 // ---------- Bluetooth Leica DISTO ----------
@@ -441,14 +520,31 @@ function pararSensor(){
 
 // ---------- Exportar ----------
 function nombreFichero(e){ const p=window.CEE_prefijoExp?window.CEE_prefijoExp(e.numExp):(e.numExp||''); return (p?p+'_':'')+((e.datos.direccion||'CEE').replace(/[^a-zA-Z0-9_-]/g,'_')); }
+// Un solo PDF con una página por planta dibujada
 function construirPDF(e){
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
-  const m=e.croquis||vacio(); const tags=etiquetasHuecos(m); const an=analizar(e);
+  const c=e.croquis?migrar(e.croquis):vacio(), norte=c.norte||0, alt=alturaDe(e);
+  const dibujadas=c.plantas.filter(p=>p.tramos.some(t=>t.segs.length));
+  const varias=dibujadas.length>1, total=analizar(e);
+  dibujadas.forEach((p,i)=>{
+    if(i>0) doc.addPage();
+    paginaPDF(doc,e,p,norte,alt,varias?p.nombre+' ('+(i+1)+'/'+dibujadas.length+')':'');
+    if(varias && i===dibujadas.length-1){
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(34,48,45);
+      doc.text('TOTAL '+dibujadas.length+' PLANTAS · Superficie: '+fmt(total.superficiePoligono_m2)+' m² · Fachada neta: '+Object.keys(total.fachadasPorOrientacion).map(k=>k+' '+fmt(total.fachadasPorOrientacion[k].muroNeto_m2)).join(' · ')+' m²',17,281);
+    }
+  });
+  if(!dibujadas.length) paginaPDF(doc,e,{tramos:[]},norte,alt,'');
+  return doc;
+}
+function paginaPDF(doc,e,m,norteDeg,alt,nombrePlanta){
+  const tags=etiquetasHuecos(m); const an=analizarPlanta(e,m,norteDeg,alt);
   doc.setFillColor(74,138,128); doc.rect(0,0,210,22,'F');
   doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
   doc.text('CROQUIS DE TOMA DE DATOS · CERTIFICADO DE EFICIENCIA ENERGÉTICA',105,9,{align:'center'});
   doc.setFontSize(11); doc.text((e.numExp?'Exp. '+e.numExp+' · ':'')+tituloDe(e),105,16,{align:'center'});
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.text('Visita: '+(e.datos.fechaVisita||'—')+' · Generado: '+new Date().toLocaleDateString('es-ES'),105,20.5,{align:'center'});
+  if(nombrePlanta){ doc.setTextColor(34,48,45); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(nombrePlanta.toUpperCase(),15,29); }
   const box={x:15,y:30,w:180,h:135}, b=bboxDe(m);
   if(b){
     const esc=Math.min(box.w/Math.max(b.x1-b.x0,0.5),box.h/Math.max(b.y1-b.y0,0.5))*0.82;
@@ -474,7 +570,7 @@ function construirPDF(e){
         doc.setFillColor(34,48,45); doc.circle(a[0],a[1],0.45,'F'); doc.circle(bb[0],bb[1],0.45,'F');
       });
     });
-    pdfNorte(doc,182,40,8,m.norte||0);
+    pdfNorte(doc,182,40,8,norteDeg);
   }
   let y=172;
   doc.setFillColor(74,138,128); doc.rect(15,y,180,7,'F');
@@ -495,12 +591,11 @@ function construirPDF(e){
   doc.text('Σ Ventanas: '+fmt(sumV)+' m²    Σ Puertas: '+fmt(sumP)+' m²    Superficie del polígono: '+fmt(an.superficiePoligono_m2)+' m²'+(an.poligonoCerrado?'':' (sin cerrar)'),17,y+4);
   doc.text('Longitud total de envolvente medida: '+fmt(an.longitudTotal_m)+' m',17,y+10);
   doc.setFont('helvetica','normal');
-  doc.text('Medianera: '+fmt(an.medianera_m)+' m · Zona común: '+fmt(an.zonaComun_m)+' m · Altura libre de cálculo: '+fmt(ALTURA_LIBRE)+' m',17,y+16);
+  doc.text('Medianera: '+fmt(an.medianera_m)+' m · Zona común: '+fmt(an.zonaComun_m)+' m · Altura libre de cálculo: '+fmt(alt)+' m',17,y+16);
   doc.text('Fachada neta por orientación: '+Object.keys(an.fachadasPorOrientacion).map(k=>k+' '+fmt(an.fachadasPorOrientacion[k].muroNeto_m2)+' m²').join(' · '),17,y+22);
   doc.setDrawColor(122,173,163); doc.setLineWidth(0.4); doc.line(15,286,195,286);
-  doc.setFontSize(8); doc.setTextColor(90,110,107);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(90,110,107);
   doc.text('Joanfe Ribes Oficina Tècnica · Arquitecto Técnico col. 3.184 COAATIEA · 605 875 899 · oficinatecnica@joanferibes.com',105,291,{align:'center'});
-  return doc;
 }
 function pdfNorte(doc,cx,cy,r,norteDeg){
   const a=(norteDeg-90)*Math.PI/180;
@@ -512,10 +607,20 @@ function pdfNorte(doc,cx,cy,r,norteDeg){
   doc.setTextColor(34,48,45); doc.setFont('helvetica','bold'); doc.setFontSize(8);
   doc.text('N', cx+(r+3)*Math.cos(a), cy+(r+3)*Math.sin(a), {align:'center',baseline:'middle'});
 }
+// DXF: todas las plantas en el mismo fichero, una al lado de otra (5 m de separación), con su nombre encima
 function construirDXF(e){
-  const m=e.croquis||vacio(), tags=etiquetasHuecos(m); let s='';
-  const linea=(cap,a,b)=>{ s+='0\nLINE\n8\n'+cap+'\n10\n'+a[0].toFixed(3)+'\n20\n'+(-a[1]).toFixed(3)+'\n30\n0\n11\n'+b[0].toFixed(3)+'\n21\n'+(-b[1]).toFixed(3)+'\n31\n0\n'; };
-  const texto=(cap,p,h,t,ang)=>{ s+='0\nTEXT\n8\n'+cap+'\n10\n'+p[0].toFixed(3)+'\n20\n'+(-p[1]).toFixed(3)+'\n30\n0\n40\n'+h+'\n1\n'+t+'\n50\n'+(ang||0).toFixed(2)+'\n72\n1\n11\n'+p[0].toFixed(3)+'\n21\n'+(-p[1]).toFixed(3)+'\n31\n0\n'; };
+  const c=e.croquis?migrar(e.croquis):vacio(); let s='';
+  let dx=0;
+  const linea=(cap,a,b)=>{ s+='0\nLINE\n8\n'+cap+'\n10\n'+(a[0]+dx).toFixed(3)+'\n20\n'+(-a[1]).toFixed(3)+'\n30\n0\n11\n'+(b[0]+dx).toFixed(3)+'\n21\n'+(-b[1]).toFixed(3)+'\n31\n0\n'; };
+  const texto=(cap,p,h,t,ang)=>{ const x=(p[0]+dx).toFixed(3); s+='0\nTEXT\n8\n'+cap+'\n10\n'+x+'\n20\n'+(-p[1]).toFixed(3)+'\n30\n0\n40\n'+h+'\n1\n'+t+'\n50\n'+(ang||0).toFixed(2)+'\n72\n1\n11\n'+x+'\n21\n'+(-p[1]).toFixed(3)+'\n31\n0\n'; };
+  const dibujadas=c.plantas.filter(p=>p.tramos.some(t=>t.segs.length));
+  let xFin=null;
+  dibujadas.forEach(m=>{
+  const b=bboxDe(m);
+  dx = xFin===null ? 0 : xFin+5-b.x0;
+  xFin = b.x1+dx;
+  if(dibujadas.length>1) texto('TITULOS',[(b.x0+b.x1)/2,b.y0-1.2],0.35,m.nombre,0);
+  const tags=etiquetasHuecos(m);
   m.tramos.forEach((t,ti)=>{
     const pts=puntosTramo(t);
     t.segs.forEach((sg,si)=>{
@@ -528,6 +633,7 @@ function construirDXF(e){
       const txt = sg.kind==='pared' ? sg.len.toFixed(2) : tags.get(ti+'-'+si)+': '+sg.len.toFixed(2)+'x'+sg.alto.toFixed(2)+' '+(sg.mat||matDef(e))+' / '+(sg.vid||vidDef(e));
       texto('COTAS',p,0.15,txt,ang);
     });
+  });
   });
   return '0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n6\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n'+s+'0\nENDSEC\n0\nEOF\n';
 }
@@ -543,12 +649,18 @@ function iniciar(){
   $('tPared').onclick=()=>setTipo('pared'); $('tVentana').onclick=()=>setTipo('ventana'); $('tPuerta').onclick=()=>setTipo('puerta');
   $('zExt').onclick=()=>setZona('ext'); $('zMed').onclick=()=>setZona('med'); $('zCom').onclick=()=>setZona('com');
   $('bSegCancel').onclick=cerrarSeg; $('bAddSeg').onclick=guardarSeg;
+  // Tecla "Ir"/Intro del teclado: en pared añade; en hueco pasa al alto y desde el alto añade
+  $('inLong').addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); if(tipoSel==='pared') guardarSeg(); else $('inAlto').focus(); });
+  $('inAlto').addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); guardarSeg(); });
   $('veloSeg').onclick=e=>{ if(e.target.id==='veloSeg') cerrarSeg(); };
   $('bUndo').onclick=deshacer; $('bCerrar').onclick=cerrarPoli; $('bNuevoT').onclick=nuevoTramo;
   $('bNorte').onclick=abrirNorte; $('bLista').onclick=abrirLista;
   $('bListaCerrar').onclick=()=>$('veloLista').classList.remove('abierto');
   $('veloLista').onclick=e=>{ if(e.target.id==='veloLista') $('veloLista').classList.remove('abierto'); };
   $('btBtn').onclick=conectarLaser;
+  $('bPlanta').onclick=abrirPlantas; $('bAnadirPlanta').onclick=anadirPlanta;
+  $('bPlantasCerrar').onclick=()=>$('veloPlantas').classList.remove('abierto');
+  $('veloPlantas').onclick=e=>{ if(e.target.id==='veloPlantas') $('veloPlantas').classList.remove('abierto'); };
   // Norte
   const cvN=$('cvNorte');
   cvN.addEventListener('pointerdown',e=>{ pararSensor(); arrastrandoN=true; norteTmp=anguloDesdeEvento(e); pintarNorte(); });
@@ -565,7 +677,7 @@ function iniciar(){
   $('bExpPDF').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); construirPDF(exp).save('Croquis_'+nombreFichero(exp)+'.pdf'); };
   $('bExpDXF').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); descargar('Croquis_'+nombreFichero(exp)+'.dxf', new Blob([construirDXF(exp)],{type:'application/dxf'})); };
   $('bExpJSON').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); descargar('Croquis_'+nombreFichero(exp)+'.json', new Blob([JSON.stringify(analizar(exp),null,2)],{type:'application/json'})); };
-  $('bBorrarCroquis').onclick=()=>{ if(!confirm('¿Borrar todo el croquis de este expediente?')) return; exp.croquis=vacio(); pendienteNuevoTramo=false; $('veloAjustes').classList.remove('abierto'); ajustarVista(); dibujar(); guardar(); };
+  $('bBorrarCroquis').onclick=()=>{ const p=planta(); if(!confirm('¿Borrar todo lo dibujado en '+p.nombre.toLowerCase()+'?')) return; p.tramos=[]; pendienteNuevoTramo=false; $('veloAjustes').classList.remove('abierto'); ajustarVista(); dibujar(); guardar(); };
 }
 
 function abrir(e, cb){
@@ -575,10 +687,10 @@ function abrir(e, cb){
   $('hint').textContent='Dibuja con el dedo la dirección del primer tramo';
   requestAnimationFrame(()=>redim());
 }
-function cerrar(){ pararSensor(); ['veloSeg','veloNorte','veloLista','veloAjustes'].forEach(id=>$(id).classList.remove('abierto')); exp=null; onChange=null; }
+function cerrar(){ pararSensor(); ['veloSeg','veloNorte','veloLista','veloAjustes','veloPlantas'].forEach(id=>$(id).classList.remove('abierto')); exp=null; onChange=null; }
 
 window.Croquis = {
-  MATERIALES, VIDRIOS, ALTURA_LIBRE,
+  MATERIALES, VIDRIOS, ALTURA_LIBRE, alturaDe,
   abrir, cerrar, hayDibujo,
   analizar,
   pdfDataUrl: e => construirPDF(e).output('datauristring'),

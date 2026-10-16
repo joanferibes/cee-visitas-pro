@@ -5,19 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#4A8A80">
-<title>CEE Visitas · Joanfe Ribes</title>
+<meta name="theme-color" content="#1F4E5A">
+<meta name="apple-mobile-web-app-title" content="CEE Visitas Pro">
+<title>CEE Visitas Pro</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="apple-touch-icon" href="icon-pro-192.png">
+<link rel="icon" href="icon-pro-192.png">
+<link rel="stylesheet" href="style.css?v=3">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="app">
 
 <div class="toast" id="toast"></div>
-<div class="sync-bar" id="sync-bar"><span id="sync-text">Sincronizando…</span></div>
+<div class="sync-bar" id="sync-bar"><div class="sync-caja"><div class="sync-rueda"></div><span id="sync-text">Sincronizando…</span></div></div>
 
 <!-- Modal municipio -->
 <div class="modal" id="modal-muni" style="display:none">
@@ -49,12 +50,12 @@
 <!-- HOME -->
 <section class="screen active" id="screen-home">
   <div class="bar">
-    <span>CEE Visitas</span>
+    <span>CEE Visitas Pro</span>
     <span class="status"><span class="dot" id="status-dot"></span><span id="status-text">…</span></span>
   </div>
   <div class="content">
     <div class="home-header">
-      <h1 class="app-title">CEE Visitas</h1>
+      <h1 class="app-title">CEE Visitas Pro</h1>
       <p class="app-subtitle">JOANFE RIBES<br>Oficina Tècnica</p>
     </div>
     <div class="tabs">
@@ -147,6 +148,7 @@
   <div class="bar">
     <button class="back" id="croq-back">‹</button>
     <span class="croq-title" id="croq-title">Croquis</span>
+    <button class="bar-chip" id="bPlanta"><span id="bPlantaTxt">Planta baja</span> ▾</button>
     <button class="bar-chip" id="btBtn"><span id="btDot"></span><span id="btTxt">Láser</span></button>
   </div>
   <div class="pasos pasos-croq"><button type="button" class="paso" data-paso="datos">1 Datos</button><button type="button" class="paso on" data-paso="croquis">2 Croquis</button><button type="button" class="paso" data-paso="checklist">3 Checklist</button><button type="button" class="paso" data-paso="email">4 Enviar</button></div>
@@ -170,7 +172,13 @@
 <!-- Hoja: nuevo segmento -->
 <div class="velo" id="veloSeg">
   <div class="hoja">
-    <h2 id="segTitulo">Nuevo tramo</h2>
+    <div class="hoja-cab">
+      <h2 id="segTitulo">Nuevo tramo</h2>
+      <div class="filaBtn arriba">
+        <button class="bCancel" id="bSegCancel">Cancelar</button>
+        <button class="bOk" id="bAddSeg">Añadir</button>
+      </div>
+    </div>
     <div class="tipos">
       <button id="tPared">Pared</button>
       <button id="tVentana">Ventana</button>
@@ -205,10 +213,6 @@
         </div>
       </div>
     </div>
-    <div class="filaBtn">
-      <button class="bCancel" id="bSegCancel">Cancelar</button>
-      <button class="bOk" id="bAddSeg">Añadir</button>
-    </div>
   </div>
 </div>
 
@@ -242,7 +246,7 @@
         <button id="bExpJSON">JSON</button>
       </div>
     </div>
-    <button class="btn-danger" id="bBorrarCroquis">Borrar todo el croquis</button>
+    <button class="btn-danger" id="bBorrarCroquis">Borrar el dibujo de esta planta</button>
     <div class="filaBtn">
       <button class="bOk" id="bAjustesOk">Cerrar</button>
     </div>
@@ -264,10 +268,21 @@
   </div>
 </div>
 
+<!-- Hoja: plantas -->
+<div class="velo" id="veloPlantas">
+  <div class="hoja">
+    <h2>Plantas</h2>
+    <p class="muted tiny" style="margin:0 0 8px">Toca una planta para dibujarla. Mientras dibujas una planta, la de debajo se ve en gris.</p>
+    <div id="listaPlantas"></div>
+    <button class="bOk wide" id="bAnadirPlanta" style="margin-top:10px">+ Añadir planta</button>
+    <div class="filaBtn"><button class="bCancel" id="bPlantasCerrar">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- Hoja: lista de tramos -->
 <div class="velo" id="veloLista">
   <div class="hoja">
-    <h2>Tramos medidos</h2>
+    <h2 id="listaTitulo">Tramos medidos</h2>
     <div id="listaSegs"></div>
     <div id="resumenCroquis" class="muted tiny"></div>
     <div class="filaBtn"><button class="bCancel" id="bListaCerrar">Cerrar</button></div>
@@ -289,6 +304,29 @@
         <option>Vivienda unifamiliar</option>
         <option>Local</option>
       </select>
+      <div class="row-2">
+        <div><label>Posición de la vivienda</label>
+          <select id="c-posicion">
+            <option value="">—</option><option>Planta baja</option><option>Planta intermedia</option><option>Última planta</option><option>Edificio entero (unifamiliar)</option>
+          </select>
+        </div>
+        <div><label>Nº de plantas del edificio</label><input type="number" id="c-numPlantas" min="1" max="30" placeholder="2"></div>
+      </div>
+      <label>Altura libre medida (m) <span class="muted tiny">solo si no es 2,70</span></label>
+      <input type="number" id="c-alturaLibre" step="0.01" inputmode="decimal" placeholder="2,70">
+      <div id="c-local-box" style="display:none">
+        <h3 class="h3">Local (terciario)</h3>
+        <label>Actividad</label>
+        <input type="text" id="c-localActividad" placeholder="ej. oficina, tienda, bar…">
+        <label>Horario</label>
+        <input type="text" id="c-localHorario" placeholder="ej. 9-14 y 17-20, lunes a sábado">
+        <div class="row-2">
+          <div><label>Iluminación</label>
+            <select id="c-localLuz"><option value="">—</option><option>LED</option><option>Fluorescente</option><option>Halógena / incandescente</option><option>Mixta</option></select>
+          </div>
+          <div><label>Nº luminarias aprox.</label><input type="number" id="c-localLuminarias" min="0" placeholder="12"></div>
+        </div>
+      </div>
       <div class="ck-row">
         <input type="checkbox" id="c-reforma">
         <label for="c-reforma">Reforma importante</label>
@@ -308,6 +346,10 @@
       </select>
       <label>Espesor estimado muros (cm)</label>
       <input type="number" id="c-murosEspesor" placeholder="30">
+      <label>Tipo de fachada (a ojo)</label>
+      <select id="c-tipoFachada">
+        <option value="">—</option><option>Ladrillo con cámara</option><option>Ladrillo macizo</option><option>Bloque de hormigón</option><option>Piedra</option><option>No se sabe</option>
+      </select>
 
       <h3 class="h3">Envolvente — Huecos (por defecto)</h3>
       <div class="row-2">
@@ -337,6 +379,16 @@
           </select>
         </div>
       </div>
+      <div id="c-bajocub-box" style="display:none">
+        <div class="row-2">
+          <div><label>Bajo cubierta: aislado en</label>
+            <select id="c-bajocubAisl"><option value="">—</option><option>Forjado</option><option>Faldones</option><option>No aislado</option><option>No se sabe</option></select>
+          </div>
+          <div><label>Bajo cubierta ventilado</label>
+            <select id="c-bajocubVent"><option value="">—</option><option>Sí</option><option>No</option><option>No se sabe</option></select>
+          </div>
+        </div>
+      </div>
       <label>Suelo</label>
       <select id="c-suelo">
         <option value="">—</option>
@@ -355,7 +407,6 @@
         <option>Bomba de calor</option>
         <option>Aerotermia</option>
         <option>Eléctrica (efecto Joule)</option>
-        <option>Suelo radiante</option>
         <option>Biomasa</option>
         <option>Otro</option>
       </select>
@@ -378,6 +429,10 @@
           </div>
           <div><label>% vivienda calefactada</label><input type="number" id="c-calPct" min="0" max="100" placeholder="80"></div>
         </div>
+        <div class="row-2">
+          <div><label>Potencia kW <span class="muted tiny">(opcional)</span></label><input type="number" id="c-calPot" step="0.1" inputmode="decimal"></div>
+          <div><label>COP / rend. <span class="muted tiny">(opcional)</span></label><input type="text" id="c-calCop" placeholder="si se ve en la placa"></div>
+        </div>
       </div>
 
       <h3 class="h3">Refrigeración</h3>
@@ -398,6 +453,10 @@
             <select id="c-refAntig"><option value="">—</option><option>Actual</option><option>Antigua</option></select>
           </div>
           <div><label>% vivienda climatizada</label><input type="number" id="c-refPct" min="0" max="100" placeholder="60"></div>
+        </div>
+        <div class="row-2">
+          <div><label>Potencia kW <span class="muted tiny">(opcional)</span></label><input type="number" id="c-refPot" step="0.1" inputmode="decimal"></div>
+          <div><label>EER <span class="muted tiny">(opcional)</span></label><input type="text" id="c-refEer" placeholder="si se ve en la placa"></div>
         </div>
       </div>
 
@@ -421,6 +480,8 @@
       <select id="c-acsComb">
         <option value="">—</option><option>Gas natural</option><option>Gasóleo</option><option>Electricidad</option><option>Aerotermia</option><option>Solar</option>
       </select>
+      <label>Potencia kW <span class="muted tiny">(opcional)</span></label>
+      <input type="number" id="c-acsPot" step="0.1" inputmode="decimal">
       <div class="ck-row">
         <input type="checkbox" id="c-acsMixta">
         <label for="c-acsMixta">ACS mixta (compartida con calefacción)</label>
@@ -432,19 +493,49 @@
         <label for="c-renPaneles">Dispone de paneles solares</label>
       </div>
       <div id="c-ren-row" style="display:none">
-        <label>Potencia instalada (kW)</label>
-        <input type="number" id="c-renPotencia" step="0.1" placeholder="3.5">
+        <label>Tipo</label>
+        <select id="c-renTipo"><option value="">—</option><option>Fotovoltaica</option><option>Solar térmica</option><option>Las dos</option></select>
+        <div id="c-renFV-box">
+          <div class="row-2">
+            <div><label>Potencia FV (kWp)</label><input type="number" id="c-renPotencia" step="0.1" placeholder="3.5"></div>
+            <div><label>Nº paneles</label><input type="number" id="c-renNumPaneles" min="0"></div>
+          </div>
+          <div class="row-2">
+            <div><label>Orientación</label>
+              <select id="c-renOrient"><option value="">—</option><option>S</option><option>SE</option><option>SO</option><option>E</option><option>O</option><option>NE</option><option>NO</option><option>N</option></select>
+            </div>
+            <div><label>Inclinación (°)</label><input type="number" id="c-renIncl" min="0" max="90" placeholder="30"></div>
+          </div>
+          <label>Baterías</label>
+          <select id="c-renBaterias"><option value="">—</option><option>Sí</option><option>No</option></select>
+        </div>
+        <div id="c-renST-box">
+          <div class="row-2">
+            <div><label>Captadores (m²)</label><input type="number" id="c-renCaptM2" step="0.1"></div>
+            <div><label>Depósito (L)</label><input type="number" id="c-renDeposito"></div>
+          </div>
+        </div>
       </div>
 
       <h3 class="h3">Observaciones</h3>
       <textarea id="c-obs" rows="3"></textarea>
 
-      <h3 class="h3">Fotos de fachada</h3>
+      <h3 class="h3">Foto de fachada</h3>
+      <p class="muted tiny">Solo una: la que va en el CE3X. Si haces otra, sustituye a la anterior.</p>
       <div class="photo-row">
         <button class="btn-secondary" data-cam="fachada" data-cam-title="Fachada">📷 Cámara</button>
         <button class="btn-secondary" data-file="fachada">🖼️ Galería</button>
       </div>
       <div class="galeria" id="gal-fachada"></div>
+
+      <h3 class="h3">Plano de situación</h3>
+      <p class="muted tiny">Se hace solo con la referencia catastral: ortofoto del PNOA con las parcelas del Catastro encima. Si no hay referencia, haz una captura o foto.</p>
+      <button class="btn-secondary" id="btn-plano" type="button">🗺️ Generar plano con la referencia catastral</button>
+      <div class="photo-row">
+        <button class="btn-secondary" data-cam="plano" data-cam-title="Plano de situación">📷 Cámara</button>
+        <button class="btn-secondary" data-file="plano">🖼️ Galería</button>
+      </div>
+      <div class="galeria" id="gal-plano"></div>
 
       <h3 class="h3">Fotos de detalle</h3>
       <div class="photo-row">
@@ -541,8 +632,8 @@
 </section>
 
 </div>
-<script src="config.js?v=2"></script>
-<script src="croquis.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="config.js?v=3"></script>
+<script src="croquis.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
