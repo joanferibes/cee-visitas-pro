@@ -77,8 +77,8 @@ function go(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.rem
 // Nº de expediente: se escribe tal cual (233-26-C); los ficheros llevan delante 2026233_ como siempre
 function prefijoExp(n){
   n=String(n||"").trim(); if(!n) return "";
-  let m=n.match(/^(\d{1,4})\s*[-\/]\s*(\d{2})(?:\s*[-\/]\s*[A-Za-z]+)?$/);
-  if(m) return "20"+m[2]+("000"+m[1]).slice(-Math.max(3,m[1].length));
+  let m=n.match(/^(\d{1,4})\s*[-\/]\s*(\d{2}|\d{4})(?:\s*[-\/]\s*[A-Za-z]+)?$/);   // 333-26-C o 333-2026-C
+  if(m) return (m[2].length===4?m[2]:"20"+m[2])+("000"+m[1]).slice(-Math.max(3,m[1].length));
   m=n.match(/^(\d{7})_*$/); if(m) return m[1];
   return n.replace(/[^\w-]/g,"").replace(/_+$/,"");
 }
@@ -804,7 +804,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=4"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=5"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
