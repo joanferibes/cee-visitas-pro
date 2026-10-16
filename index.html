@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -103,9 +103,9 @@
 
 <!-- DATOS -->
 <section class="screen" id="screen-datos">
-  <div class="bar"><button class="back" data-go="home">‹</button><span id="datos-title">Datos</span></div>
+  <div class="bar"><button class="back" id="datos-back">‹</button><span id="datos-title">Datos</span></div>
   <div class="content">
-    <div class="pasos"><span class="paso on">1 Datos</span><span class="paso">2 Croquis</span><span class="paso">3 Checklist</span><span class="paso">4 Enviar</span></div>
+    <div class="pasos"><button type="button" class="paso on" data-paso="datos">1 Datos</button><button type="button" class="paso" data-paso="croquis">2 Croquis</button><button type="button" class="paso" data-paso="checklist">3 Checklist</button><button type="button" class="paso" data-paso="email">4 Enviar</button></div>
     <div class="form">
       <label>Nº expediente</label>
       <input type="text" id="f-numexp" placeholder="ej. 233-26-C">
@@ -139,8 +139,6 @@
       <textarea id="f-obs" rows="3"></textarea>
     </div>
     <button class="btn-secondary" id="btn-guardar-datos" style="margin-bottom:8px">💾 Guardar cambios</button>
-    <button class="btn-primary" id="btn-ir-croquis">Siguiente: Croquis ›</button>
-    <button class="btn-secondary" id="btn-saltar-checklist">Ir directamente al checklist ›</button>
   </div>
 </section>
 
@@ -151,6 +149,7 @@
     <span class="croq-title" id="croq-title">Croquis</span>
     <button class="bar-chip" id="btBtn"><span id="btDot"></span><span id="btTxt">Láser</span></button>
   </div>
+  <div class="pasos pasos-croq"><button type="button" class="paso" data-paso="datos">1 Datos</button><button type="button" class="paso on" data-paso="croquis">2 Croquis</button><button type="button" class="paso" data-paso="checklist">3 Checklist</button><button type="button" class="paso" data-paso="email">4 Enviar</button></div>
   <div id="lienzoWrap">
     <canvas id="cv"></canvas>
     <div id="hint">Dibuja con el dedo la dirección del primer tramo</div>
@@ -279,7 +278,7 @@
 <section class="screen" id="screen-checklist">
   <div class="bar"><button class="back" id="chk-back">‹</button><span>Checklist de visita</span></div>
   <div class="content">
-    <div class="pasos"><span class="paso">1 Datos</span><span class="paso">2 Croquis</span><span class="paso on">3 Checklist</span><span class="paso">4 Enviar</span></div>
+    <div class="pasos"><button type="button" class="paso" data-paso="datos">1 Datos</button><button type="button" class="paso" data-paso="croquis">2 Croquis</button><button type="button" class="paso on" data-paso="checklist">3 Checklist</button><button type="button" class="paso" data-paso="email">4 Enviar</button></div>
     <div class="form">
 
       <h3 class="h3">Datos generales</h3>
@@ -462,7 +461,8 @@
       </div>
       <div class="galeria" id="gal-placas"></div>
 
-      <h3 class="h3">Otros croquis (foto o PDF)</h3>
+      <h3 class="h3">Croquis a mano (foto o PDF)</h3>
+      <p class="muted tiny">Puedes añadir varios, por ejemplo uno por planta. Se guardan como croquis_extra_1, _2…</p>
       <div class="photo-row">
         <button class="btn-secondary" data-cam="croquisExtra" data-cam-title="Croquis en papel">📷 Cámara</button>
         <button class="btn-secondary" data-file="croquisExtra" data-pdf="1">📁 Archivo</button>
@@ -500,7 +500,7 @@
 <section class="screen" id="screen-email">
   <div class="bar"><button class="back" data-go="checklist">‹</button><span>Enviar al colaborador</span></div>
   <div class="content">
-    <div class="pasos"><span class="paso">1 Datos</span><span class="paso">2 Croquis</span><span class="paso">3 Checklist</span><span class="paso on">4 Enviar</span></div>
+    <div class="pasos"><button type="button" class="paso" data-paso="datos">1 Datos</button><button type="button" class="paso" data-paso="croquis">2 Croquis</button><button type="button" class="paso" data-paso="checklist">3 Checklist</button><button type="button" class="paso on" data-paso="email">4 Enviar</button></div>
     <div class="form">
       <label>Destinatario</label>
       <input type="email" id="e-to" placeholder="colaborador@ejemplo.com">
@@ -509,7 +509,7 @@
       <label>Cuerpo del email</label>
       <textarea id="e-body" rows="14"></textarea>
     </div>
-    <p class="muted">Se creará un único borrador en tu Gmail con el checklist en PDF, el croquis (PDF y DXF), las fotos y la firma. Podrás revisarlo y enviarlo desde Gmail.</p>
+    <p class="muted">El borrador se crea siempre en el Gmail de Joanfe (también si la visita la hace otra persona) y él decide si lo envía. Lleva el checklist en PDF, el croquis (PDF y DXF), las fotos y la firma. Podrás revisarlo y enviarlo desde Gmail.</p>
     <button class="btn-primary" id="btn-crear-borrador">Crear borrador en Gmail (con adjuntos)</button>
   </div>
 </section>
@@ -522,6 +522,8 @@
       <label>URL del Apps Script</label>
       <input type="text" id="cfg-url">
       <p class="muted tiny">Dirección del script de Google de esta app (CEE Visitas Pro). No la toques a menos que sepas lo que haces.</p>
+      <label>Quién hace las visitas con este móvil</label>
+      <input type="text" id="cfg-tecnico" placeholder="Nombre (sale en el correo)">
       <label>Email del colaborador CE3X</label>
       <input type="email" id="cfg-colab" placeholder="colaborador@ejemplo.com">
       <label>Firma de email</label>
@@ -539,8 +541,8 @@
 </section>
 
 </div>
-<script src="config.js?v=1"></script>
-<script src="croquis.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="config.js?v=2"></script>
+<script src="croquis.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

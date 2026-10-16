@@ -440,7 +440,7 @@ function pararSensor(){
 }
 
 // ---------- Exportar ----------
-function nombreFichero(e){ return (e.numExp?e.numExp+'_':'')+((e.datos.direccion||'CEE').replace(/[^a-zA-Z0-9_-]/g,'_')); }
+function nombreFichero(e){ const p=window.CEE_prefijoExp?window.CEE_prefijoExp(e.numExp):(e.numExp||''); return (p?p+'_':'')+((e.datos.direccion||'CEE').replace(/[^a-zA-Z0-9_-]/g,'_')); }
 function construirPDF(e){
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
   const m=e.croquis||vacio(); const tags=etiquetasHuecos(m); const an=analizar(e);

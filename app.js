@@ -58,14 +58,23 @@ async function apiBorrarExpediente(id){ return jsonp(await backendUrl(),{action:
 
 async function getCfg(){
   const c=await dbGet("config","main");
-  return c||{ key:"main", scriptUrl:DEFAULT_SCRIPT_URL, emailColab:"", firma:"Un saludo,\n\nJuan Felipe Ribes Aranda\nArquitecto Técnico · col. 3.184\nJoanfe Ribes Oficina Tècnica\nTel. 605 875 899\njoanferibes@gmail.com", lastSync:"" };
+  return c||{ key:"main", scriptUrl:DEFAULT_SCRIPT_URL, emailColab:(window.CEE_CONFIG&&window.CEE_CONFIG.emailColab)||"", tecnico:"", firma:"Un saludo,\n\nJuan Felipe Ribes Aranda\nArquitecto Técnico · col. 3.184\nJoanfe Ribes Oficina Tècnica\nTel. 605 875 899\njoanferibes@gmail.com", lastSync:"" };
 }
 async function saveCfg(c){ c.key="main"; await dbPut("config",c); }
 
 // ---------------- Estado y utilidades ----------------
 const state={currentTab:"pendiente", expCurrent:null, online:navigator.onLine, firma:{ctx:null, drawing:false, hasDrawn:false}, camera:{stream:null, activeKey:null, n:0}, importing:false, subiendo:false, fileKey:null};
 const $=(id)=>document.getElementById(id);
-function go(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); const t=$("screen-"+id); if(t) t.classList.add("active"); window.scrollTo(0,0); }
+function go(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); const t=$("screen-"+id); if(t) t.classList.add("active"); state.pantalla=id; window.scrollTo(0,0); }
+// Nº de expediente: se escribe tal cual (233-26-C); los ficheros llevan delante 2026233_ como siempre
+function prefijoExp(n){
+  n=String(n||"").trim(); if(!n) return "";
+  let m=n.match(/^(\d{1,4})\s*[-\/]\s*(\d{2})(?:\s*[-\/]\s*[A-Za-z]+)?$/);
+  if(m) return "20"+m[2]+("000"+m[1]).slice(-Math.max(3,m[1].length));
+  m=n.match(/^(\d{7})_*$/); if(m) return m[1];
+  return n.replace(/[^\w-]/g,"").replace(/_+$/,"");
+}
+window.CEE_prefijoExp=prefijoExp;
 function toast(m,ms){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),ms||2800); }
 function showSync(m){ const b=$("sync-bar"); $("sync-text").textContent=m; b.classList.add("visible"); }
 function hideSync(){ $("sync-bar").classList.remove("visible"); }
@@ -137,8 +146,8 @@ async function sincronizar(){
     if(res && res.status==="ok" && Array.isArray(res.expedientes)){
       const locales=await dbGetAll("expedientes");
       for(const r of res.expedientes){
-        let local=locales.find(e=>e.id===r.id);
-        if(!local && r.datos && r.datos.solicitudId) local=locales.find(e=>e.solicitudId && e.solicitudId===r.datos.solicitudId);
+        // Solo por id: las filas repetidas de una misma solicitud se guardan aparte y la lista las agrupa
+        const local=locales.find(e=>e.id===r.id);
         if(!local){
           const exp=nuevoExpedienteVacio();
           exp.id=r.id; exp.fechaActualizacion=r.fechaActualizacion||exp.fechaActualizacion; exp.estado=r.estado||"pendiente";
@@ -166,6 +175,19 @@ async function sincronizar(){
         }
       }
     }
+    // Solicitudes del formulario web que aún no tienen expediente: entran solas en Pendientes
+    try{
+      const rs=await apiListarSolicitudes();
+      if(rs && rs.status==="ok" && Array.isArray(rs.solicitudes)){
+        const locales=await dbGetAll("expedientes");
+        for(const s of rs.solicitudes){
+          if(!s.id || (s.estado||"pendiente")!=="pendiente") continue;
+          if(locales.some(e=>e.solicitudId===String(s.id))) continue;
+          const exp=nuevoExpedienteVacio(); exp.id="sol_"+s.id; exp.origen="formulario"; exp.solicitudId=String(s.id);
+          rellenarDesdeSolicitud(exp,s); exp.pendienteSync=false; await dbPut("expedientes",exp); pull++;
+        }
+      }
+    }catch(e){}
     const cfg=await getCfg(); cfg.lastSync=new Date().toISOString(); await saveCfg(cfg);
     setStatus(true); hideSync(); renderHome();
     toast("Sincronizado · ↑"+pOk+" ↓"+pull+(pFail?" · "+pFail+" fallo":""));
@@ -174,8 +196,43 @@ async function sincronizar(){
 }
 
 // ---------------- Pantalla inicio ----------------
+// La hoja tiene filas repetidas de la misma solicitud (una por móvil/navegador que la importó) y filas vacías.
+// Se agrupan por solicitud y se muestra la más avanzada (enviado > visitado > pendiente).
+const RANGO={pendiente:1, visitado:2, enviado:3};
+function expVacio(e){
+  const d=e.datos||{}, f=e.fotos||{};
+  return !d.direccion && !d.nombre && !e.numExp && !(e.croquis&&e.croquis.tramos&&e.croquis.tramos.length) &&
+    !["fachada","detalle","placas","croquisExtra"].some(k=>(f[k]||[]).length);
+}
+function claveGrupo(e){ return e.solicitudId ? "s:"+e.solicitudId : "i:"+e.id; }
+function masAvanzado(a,b){
+  const ra=RANGO[a.estado]||1, rb=RANGO[b.estado]||1;
+  if(ra!==rb) return ra>rb;
+  return new Date(a.fechaActualizacion||0).getTime() > new Date(b.fechaActualizacion||0).getTime();
+}
+function agruparExpedientes(exps){
+  const g=new Map();
+  for(const e of exps){ if(expVacio(e)) continue; const k=claveGrupo(e), a=g.get(k); if(!a || masAvanzado(e,a)) g.set(k,e); }
+  return [...g.values()];
+}
+async function cambiarEstadoGrupo(exp, nuevo){
+  const todos=await dbGetAll("expedientes"), k=claveGrupo(exp);
+  for(const e of todos.filter(x=>claveGrupo(x)===k)){
+    normalizar(e); e.estado=nuevo; await guardarExpedienteLocal(e); pushExpediente(e).catch(()=>{});
+  }
+  if(exp.solicitudId) apiActualizarEstadoSolicitud(exp.solicitudId, nuevo==="pendiente"?"pendiente":nuevo).catch(()=>{});
+}
+async function marcarTerminado(exp){
+  if(!confirm("¿Marcar como terminado?\n\n"+(exp.datos.direccion||"(sin dirección)")+"\n\nPasa a Enviados y deja de salir en Pendientes y Visitados.")) return;
+  await cambiarEstadoGrupo(exp,"enviado"); toast("Marcado como terminado ✓"); renderHome();
+}
+async function reabrir(exp){
+  if(!confirm("¿Volver a poner en Pendientes?\n\n"+(exp.datos.direccion||"(sin dirección)"))) return;
+  await cambiarEstadoGrupo(exp,"pendiente"); toast("Vuelve a Pendientes"); renderHome();
+}
+
 async function renderHome(){
-  const exps=await dbGetAll("expedientes");
+  const exps=agruparExpedientes(await dbGetAll("expedientes"));
   const pend=exps.filter(e=>e.estado==="pendiente"), vis=exps.filter(e=>e.estado==="visitado"), env=exps.filter(e=>e.estado==="enviado");
   $("cnt-pend").textContent=pend.length; $("cnt-vis").textContent=vis.length; $("cnt-env").textContent=env.length;
   const tab=state.currentTab, list = tab==="pendiente"?pend: tab==="visitado"?vis: env;
@@ -189,8 +246,11 @@ async function renderHome(){
     const fechaStr=exp.datos.fechaVisita?"Visita: "+exp.datos.fechaVisita:("Últ. "+formatFecha(exp.fechaActualizacion));
     const marcas=(exp.pendienteSync?" · ↑":"")+(exp.drive&&exp.drive.url?" · ☁️":"");
     const item=document.createElement("div"); item.className="list-item";
-    item.innerHTML='<div class="li-title">'+esc(exp.datos.direccion||"(sin dirección)")+esc(muni?", "+muni:"")+'</div><div class="li-sub">'+esc(exp.datos.nombre||"(sin nombre)")+'</div><div class="li-meta"><span>'+esc(numExp+fechaStr+marcas)+'</span><div class="li-meta-right"><span class="badge '+badge+'">'+esc(exp.estado)+'</span><button class="btn-delete-exp" title="Eliminar de este dispositivo" type="button">🗑</button></div></div>';
+    item.innerHTML='<div class="li-title">'+esc(exp.datos.direccion||"(sin dirección)")+esc(muni?", "+muni:"")+'</div><div class="li-sub">'+esc(exp.datos.nombre||"(sin nombre)")+'</div><div class="li-meta"><span>'+esc(numExp+fechaStr+marcas)+'</span><div class="li-meta-right"><span class="badge '+badge+'">'+esc(exp.estado)+'</span>'+
+      (exp.estado==="enviado"?'<button class="btn-estado-exp" title="Volver a pendientes" type="button">↩</button>':'<button class="btn-estado-exp" title="Marcar como terminado" type="button">✔</button>')+
+      '<button class="btn-delete-exp" title="Eliminar de este dispositivo" type="button">🗑</button></div></div>';
     item.onclick=()=>abrirExpediente(exp.id);
+    item.querySelector(".btn-estado-exp").onclick=(ev)=>{ ev.stopPropagation(); if(exp.estado==="enviado") reabrir(exp); else marcarTerminado(exp); };
     item.querySelector(".btn-delete-exp").onclick=(ev)=>{ ev.stopPropagation(); eliminarExpedienteLocal(exp.id); };
     cont.appendChild(item);
   }
@@ -212,7 +272,7 @@ async function cargarSolicitudes(){
   try{
     const res=await apiListarSolicitudes(); cont.innerHTML="";
     if(!res || res.status!=="ok"){ cont.innerHTML="<p class='muted'>Error: "+esc(res&&res.message||"desconocido")+"</p>"; return; }
-    const sols=res.solicitudes||[];
+    const sols=(res.solicitudes||[]).filter(s=>(s.estado||"pendiente")==="pendiente").reverse();
     if(sols.length===0){ $("empty-sol").style.display="block"; return; }
     for(const s of sols){
       const item=document.createElement("div"); item.className="list-item";
@@ -222,23 +282,33 @@ async function cargarSolicitudes(){
     }
   }catch(e){ cont.innerHTML="<p class='muted'>No se pudo conectar: "+esc(e.message)+"</p>"; }
 }
+function rellenarDesdeSolicitud(exp,s){
+  exp.datos.nombre=s.nombre||""; exp.datos.tipoDocumento=s.tipoDocumento||"DNI";
+  exp.datos.numeroDocumento=s.numeroDocumento||""; exp.datos.telefono=s.telefono||"";
+  exp.datos.email=s.email||""; exp.datos.direccion=s.direccion||"";
+  exp.datos.codigoPostal=s.codigoPostal||""; exp.datos.referenciaCatastral=s.referenciaCatastral||"";
+  exp.datos.fechaVisita=normFecha(s.fechaVisita); exp.datos.observaciones=s.observaciones||"";
+  const muni=matchMuni(s.municipio);
+  if(muni.startsWith("__custom__:")){ exp.datos.municipio="Otro"; exp.datos.municipioCustom=muni.substring(11); }
+  else { exp.datos.municipio=muni; exp.datos.municipioCustom=""; }
+}
 async function importarSolicitud(id){
   if(state.importing){ toast("Espera… ya se está importando"); return; }
   state.importing=true; toast("Importando…");
   try{
     const res=await apiDetalleSolicitud(id);
     if(!res || res.status!=="ok" || !res.solicitud){ toast("No se pudo cargar"); return; }
-    const s=res.solicitud, todos=await dbGetAll("expedientes");
-    let exp=todos.find(e=>e.solicitudId===String(id));
-    if(exp) normalizar(exp); else { exp=nuevoExpedienteVacio(); exp.origen="formulario"; exp.solicitudId=String(id); }
-    exp.datos.nombre=s.nombre||""; exp.datos.tipoDocumento=s.tipoDocumento||"DNI";
-    exp.datos.numeroDocumento=s.numeroDocumento||""; exp.datos.telefono=s.telefono||"";
-    exp.datos.email=s.email||""; exp.datos.direccion=s.direccion||"";
-    exp.datos.codigoPostal=s.codigoPostal||""; exp.datos.referenciaCatastral=s.referenciaCatastral||"";
-    exp.datos.fechaVisita=normFecha(s.fechaVisita); exp.datos.observaciones=s.observaciones||"";
-    const muni=matchMuni(s.municipio);
-    if(muni.startsWith("__custom__:")){ exp.datos.municipio="Otro"; exp.datos.municipioCustom=muni.substring(11); }
-    else { exp.datos.municipio=muni; exp.datos.municipioCustom=""; }
+    const s=res.solicitud;
+    // Si ya existe (en este móvil o en la hoja, aunque lo importara otro móvil) se abre ese: así no se duplica
+    let todos=await dbGetAll("expedientes");
+    if(!todos.some(e=>e.solicitudId===String(id)) && navigator.onLine){ await sincronizar(); todos=await dbGetAll("expedientes"); }
+    const mismos=todos.filter(e=>e.solicitudId===String(id));
+    let exp=mismos.length ? mismos.reduce((a,b)=>masAvanzado(b,a)?b:a) : null;
+    if(exp){
+      normalizar(exp);
+      if(exp.estado!=="pendiente" && !confirm("Esta solicitud ya está "+exp.estado+". ¿Abrirla igualmente?")) return;
+      if(!exp.datos.direccion) rellenarDesdeSolicitud(exp,s);
+    } else { exp=nuevoExpedienteVacio(); exp.id="sol_"+id; exp.origen="formulario"; exp.solicitudId=String(id); rellenarDesdeSolicitud(exp,s); }
     await guardarExpedienteLocal(exp);
     state.expCurrent=exp; pushExpediente(exp).catch(()=>{});
     rellenarFormDatos(exp); rellenarChecklist(exp);
@@ -465,7 +535,7 @@ function carpetaDe(exp){
   const muni=muniDe(exp);
   return { direccion:(exp.datos.direccion||"SIN DIRECCION")+(muni?", "+muni:""), fecha:exp.datos.fechaVisita||hoyISO(), folderId:(exp.drive&&exp.drive.folderId)||"" };
 }
-function nombreBase(exp){ return (exp.numExp?exp.numExp.replace(/[^\w-]/g,"")+"_":""); }
+function nombreBase(exp){ const p=prefijoExp(exp.numExp); return p?p+"_":""; }
 function datosJson(exp){
   return JSON.stringify({
     app:"cee-visitas-pro", version:1, generado:new Date().toISOString(),
@@ -541,7 +611,7 @@ async function generarImpresosFirmados(){
   showSync("Generando impresos firmados…");
   try{
     await apiPost({
-      tipo:"impresos_firmados", numExp:exp.numExp||"sin", nombre:exp.datos.nombre, numeroDocumento:exp.datos.numeroDocumento,
+      tipo:"impresos_firmados", numExp:prefijoExp(exp.numExp)||"sin", nombre:exp.datos.nombre, numeroDocumento:exp.datos.numeroDocumento,
       direccion:exp.datos.direccion, municipio:muniDe(exp), codigoPostal:exp.datos.codigoPostal,
       referenciaCatastral:exp.datos.referenciaCatastral, telefono:exp.datos.telefono, fechaVisita:exp.datos.fechaVisita,
       tipoPropiedad:"parte_edificio", firmaPropietario:exp.fotos.firma, carpeta:carpetaDe(exp)
@@ -555,13 +625,13 @@ async function abrirPantallaEmail(){
   const exp=state.expCurrent; if(!exp) return;
   const cfg=await getCfg(), c=exp.checklist, muniStr=muniDe(exp);
   $("e-to").value=cfg.emailColab||"";
-  $("e-asunto").value="CEE "+(exp.numExp?exp.numExp+"_":"")+(exp.datos.direccion||"");
+  $("e-asunto").value="CEE "+(prefijoExp(exp.numExp)?prefijoExp(exp.numExp)+"__":"")+(exp.datos.direccion||"");
   let croq="";
   if(window.Croquis.hayDibujo(exp)){
     const an=window.Croquis.analizar(exp);
     croq="\n\nCROQUIS\n- Superficie del polígono: "+an.superficiePoligono_m2.toFixed(2)+" m²"+(an.poligonoCerrado?"":" (contorno sin cerrar)")+"\n- Huecos: "+an.huecos.length+"\n- Fachada neta por orientación: "+Object.keys(an.fachadasPorOrientacion).map(k=>k+" "+an.fachadasPorOrientacion[k].muroNeto_m2.toFixed(2)).join(" · ")+" m² (altura libre 2,70 m)";
   }
-  $("e-body").value="Hola,\n\nAdjunto datos y documentación de la visita para el certificado energético:\n\nDATOS DEL INMUEBLE\n- Expediente: "+(exp.numExp||"—")+"\n- Cliente: "+exp.datos.nombre+"\n- Dirección: "+exp.datos.direccion+"\n- Municipio: "+muniStr+" (CP "+exp.datos.codigoPostal+")\n- Ref. catastral: "+exp.datos.referenciaCatastral+"\n- Teléfono: "+exp.datos.telefono+"\n- Fecha de visita: "+exp.datos.fechaVisita+"\n- Tipo inmueble: "+c.tipoViv+(c.reformaImportante?"\n- Reforma importante: Sí (año "+(c.reformaAnyo||"?")+")":"")+
+  $("e-body").value="Hola,\n\nAdjunto datos y documentación de la visita para el certificado energético:\n\nDATOS DEL INMUEBLE\n- Expediente: "+(exp.numExp||"—")+"\n- Cliente: "+exp.datos.nombre+"\n- Dirección: "+exp.datos.direccion+"\n- Municipio: "+muniStr+" (CP "+exp.datos.codigoPostal+")\n- Ref. catastral: "+exp.datos.referenciaCatastral+"\n- Teléfono: "+exp.datos.telefono+"\n- Fecha de visita: "+exp.datos.fechaVisita+(cfg.tecnico?"\n- Visita realizada por: "+cfg.tecnico:"")+"\n- Tipo inmueble: "+c.tipoViv+(c.reformaImportante?"\n- Reforma importante: Sí (año "+(c.reformaAnyo||"?")+")":"")+
     "\n\nENVOLVENTE\n- Aislamiento posible en fachada: "+(c.posAislamiento||"—")+"\n- Espesor muros: "+(c.murosEspesor||"—")+" cm\n- Carpintería: "+(c.carpinteria||"—")+" · Acristalamiento: "+(c.acristalamiento||"—")+" · Permeabilidad: "+(c.permeabilidad||"—")+"\n- Techo: "+(c.techo||"—")+(c.techoAislada?" ("+c.techoAislada+")":"")+"\n- Suelo: "+(c.suelo||"—")+
     croq+
     "\n\nINSTALACIONES\n- Calefacción: "+(c.calTipo||"—")+(c.calTipo&&c.calTipo!=="No tiene instalada"?" · "+(c.calComb||"")+" · "+(c.calDist||"")+" · "+(c.calAntig||"")+" · "+(c.calPct||0)+"% vivienda":"")+
@@ -593,12 +663,12 @@ async function crearBorradorGmail(){
 // ---------------- Configuración ----------------
 async function cargarCfgUI(){
   const cfg=await getCfg();
-  $("cfg-url").value=cfg.scriptUrl||DEFAULT_SCRIPT_URL; $("cfg-colab").value=cfg.emailColab||""; $("cfg-firma").value=cfg.firma||"";
+  $("cfg-url").value=cfg.scriptUrl||DEFAULT_SCRIPT_URL; $("cfg-colab").value=cfg.emailColab||""; $("cfg-firma").value=cfg.firma||""; $("cfg-tecnico").value=cfg.tecnico||"";
   $("sync-info").textContent=cfg.lastSync?"Última sincronización: "+formatFecha(cfg.lastSync):"Sin sincronizar todavía";
 }
 async function guardarCfgUI(){
   const cfg=await getCfg();
-  cfg.scriptUrl=$("cfg-url").value.trim()||DEFAULT_SCRIPT_URL; cfg.emailColab=$("cfg-colab").value.trim(); cfg.firma=$("cfg-firma").value;
+  cfg.scriptUrl=$("cfg-url").value.trim()||DEFAULT_SCRIPT_URL; cfg.emailColab=$("cfg-colab").value.trim(); cfg.firma=$("cfg-firma").value; cfg.tecnico=$("cfg-tecnico").value.trim();
   await saveCfg(cfg); toast("Configuración guardada");
 }
 async function testConexion(){
@@ -614,15 +684,30 @@ function abrirCroquis(){
   go("croquis");
   window.Croquis.abrir(exp, ()=>guardarExpedienteLocal(exp));
 }
-function salirCroquis(destino){
-  window.Croquis.cerrar();
-  if(destino==="checklist"){ rellenarChecklist(state.expCurrent); irAChecklist(); }
-  else go("datos");
+// Pestañas Datos / Croquis / Checklist / Enviar: se puede saltar de una a otra en cualquier momento.
+// Antes de cambiar se guarda lo que haya en la pantalla actual.
+async function guardarPantallaActual(){
+  const exp=state.expCurrent; if(!exp) return;
+  const desde=state.pantalla;
+  if(desde==="datos") leerFormDatos(exp);
+  else if(desde==="checklist") leerChecklist(exp);
+  else if(desde==="croquis") window.Croquis.cerrar();
+  await guardarExpedienteLocal(exp);
+  if(desde==="datos"||desde==="checklist") pushExpediente(exp).catch(()=>{});
 }
+async function irA(dest){
+  const exp=state.expCurrent; if(!exp || state.pantalla===dest) return;
+  await guardarPantallaActual();
+  if(dest==="datos"){ rellenarFormDatos(exp); go("datos"); }
+  else if(dest==="croquis") abrirCroquis();
+  else if(dest==="checklist"){ rellenarChecklist(exp); irAChecklist(); }
+  else if(dest==="email") await abrirPantallaEmail();
+}
+async function salirAInicio(){ await guardarPantallaActual(); go("home"); renderHome(); }
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=1"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=2"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
@@ -641,11 +726,11 @@ async function init(){
     const ok=await pushExpediente(state.expCurrent);
     toast(ok?"Guardado ✓ (sigue en pendientes)":"Guardado en local (↑ pendiente)"); renderHome();
   };
-  $("btn-ir-croquis").onclick=async()=>{ if(!state.expCurrent) return; leerFormDatos(state.expCurrent); await guardarExpedienteLocal(state.expCurrent); pushExpediente(state.expCurrent).catch(()=>{}); abrirCroquis(); };
-  $("btn-saltar-checklist").onclick=async()=>{ if(!state.expCurrent) return; leerFormDatos(state.expCurrent); await guardarExpedienteLocal(state.expCurrent); pushExpediente(state.expCurrent).catch(()=>{}); irAChecklist(); };
-  $("croq-back").onclick=()=>salirCroquis("datos");
-  $("bCroqSig").onclick=()=>salirCroquis("checklist");
-  $("chk-back").onclick=async()=>{ if(state.expCurrent){ leerChecklist(state.expCurrent); await guardarExpedienteLocal(state.expCurrent); } abrirCroquis(); };
+  document.querySelectorAll("[data-paso]").forEach(b=>{ b.onclick=()=>irA(b.getAttribute("data-paso")); });
+  $("croq-back").onclick=()=>salirAInicio();
+  $("bCroqSig").onclick=()=>irA("checklist");
+  $("chk-back").onclick=()=>salirAInicio();
+  $("datos-back").onclick=()=>salirAInicio();
 
   $("btn-guardar").onclick=async()=>{
     const exp=state.expCurrent; if(!exp) return;
