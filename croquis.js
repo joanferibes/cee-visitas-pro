@@ -520,6 +520,20 @@ function pararSensor(){
 
 // ---------- Exportar ----------
 function nombreFichero(e){ const p=window.CEE_prefijoExp?window.CEE_prefijoExp(e.numExp):(e.numExp||''); return (p?p+'_':'')+((e.datos.direccion||'CEE').replace(/[^a-zA-Z0-9_-]/g,'_')); }
+// Nombre del PDF final del croquis: "2026233_croquis cee CALLE Y NÚMERO" (va a la raíz del expediente y al trabajo final)
+function callePrincipal(dir){
+  const trozos=String(dir||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const i=trozos.findIndex(s=>/\d/.test(s));
+  if(i<0) return trozos[0] || 'SIN DIRECCION';
+  // "PDA. COSTERA BOLATA, 7 Bajo": el número va en el trozo siguiente a la calle
+  if(/^\d/.test(trozos[i]) && i>0) return trozos[i-1]+' '+trozos[i];
+  return trozos[i];
+}
+function nombreCroquisPDF(e){
+  const p=window.CEE_prefijoExp?window.CEE_prefijoExp(e.numExp):(e.numExp||'');
+  const calle=callePrincipal(e.datos.direccion).replace(/[\\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim().toUpperCase();
+  return (p?p+'_':'')+'croquis cee '+calle+'.pdf';
+}
 // Un solo PDF con una página por planta dibujada
 function construirPDF(e){
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -528,7 +542,7 @@ function construirPDF(e){
   const varias=dibujadas.length>1, total=analizar(e);
   dibujadas.forEach((p,i)=>{
     if(i>0) doc.addPage();
-    paginaPDF(doc,e,p,norte,alt,varias?p.nombre+' ('+(i+1)+'/'+dibujadas.length+')':'');
+    paginaPDF(doc,e,p,norte,alt,varias?p.nombre+' ('+(i+1)+'/'+dibujadas.length+')':'', i>0?dibujadas[i-1]:null);
     if(varias && i===dibujadas.length-1){
       doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(34,48,45);
       doc.text('TOTAL '+dibujadas.length+' PLANTAS · Superficie: '+fmt(total.superficiePoligono_m2)+' m² · Fachada neta: '+Object.keys(total.fachadasPorOrientacion).map(k=>k+' '+fmt(total.fachadasPorOrientacion[k].muroNeto_m2)).join(' · ')+' m²',17,281);
@@ -537,7 +551,8 @@ function construirPDF(e){
   if(!dibujadas.length) paginaPDF(doc,e,{tramos:[]},norte,alt,'');
   return doc;
 }
-function paginaPDF(doc,e,m,norteDeg,alt,nombrePlanta){
+// fantasma = planta de debajo: se dibuja en gris discontinuo bajo la planta de esta página
+function paginaPDF(doc,e,m,norteDeg,alt,nombrePlanta,fantasma){
   const tags=etiquetasHuecos(m); const an=analizarPlanta(e,m,norteDeg,alt);
   doc.setFillColor(74,138,128); doc.rect(0,0,210,22,'F');
   doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
@@ -545,11 +560,18 @@ function paginaPDF(doc,e,m,norteDeg,alt,nombrePlanta){
   doc.setFontSize(11); doc.text((e.numExp?'Exp. '+e.numExp+' · ':'')+tituloDe(e),105,16,{align:'center'});
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.text('Visita: '+(e.datos.fechaVisita||'—')+' · Generado: '+new Date().toLocaleDateString('es-ES'),105,20.5,{align:'center'});
   if(nombrePlanta){ doc.setTextColor(34,48,45); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(nombrePlanta.toUpperCase(),15,29); }
-  const box={x:15,y:30,w:180,h:135}, b=bboxDe(m);
+  const box={x:15,y:30,w:180,h:135}, b=bboxDe({tramos:m.tramos.concat(fantasma?fantasma.tramos:[])});
   if(b){
     const esc=Math.min(box.w/Math.max(b.x1-b.x0,0.5),box.h/Math.max(b.y1-b.y0,0.5))*0.82;
     const ox=box.x+box.w/2-(b.x0+b.x1)/2*esc, oy=box.y+box.h/2-(b.y0+b.y1)/2*esc;
     const W=p=>[p[0]*esc+ox,p[1]*esc+oy];
+    if(fantasma){
+      doc.setDrawColor(150,165,162); doc.setLineWidth(0.35); doc.setLineDashPattern([1.6,1.2],0);
+      fantasma.tramos.forEach(t=>{ const pts=puntosTramo(t); t.segs.forEach((s,si)=>{ const a=W(pts[si]), bb=W(pts[si+1]); doc.line(a[0],a[1],bb[0],bb[1]); }); });
+      doc.setLineDashPattern([],0);
+      doc.setFontSize(7); doc.setFont('helvetica','italic'); doc.setTextColor(130,145,142);
+      doc.text('En discontinua: '+fantasma.nombre.toLowerCase(),box.x+box.w,box.y+box.h-1,{align:'right'});
+    }
     m.tramos.forEach((t,ti)=>{
       const pts=puntosTramo(t);
       t.segs.forEach((s,si)=>{
@@ -588,7 +610,7 @@ function paginaPDF(doc,e,m,norteDeg,alt,nombrePlanta){
   });
   y+=4; if(y>262){doc.addPage();y=20;}
   doc.setFont('helvetica','bold'); doc.setFontSize(9);
-  doc.text('Σ Ventanas: '+fmt(sumV)+' m²    Σ Puertas: '+fmt(sumP)+' m²    Superficie del polígono: '+fmt(an.superficiePoligono_m2)+' m²'+(an.poligonoCerrado?'':' (sin cerrar)'),17,y+4);
+  doc.text('Total ventanas: '+fmt(sumV)+' m²    Total puertas: '+fmt(sumP)+' m²    Superficie del polígono: '+fmt(an.superficiePoligono_m2)+' m²'+(an.poligonoCerrado?'':' (sin cerrar)'),17,y+4);
   doc.text('Longitud total de envolvente medida: '+fmt(an.longitudTotal_m)+' m',17,y+10);
   doc.setFont('helvetica','normal');
   doc.text('Medianera: '+fmt(an.medianera_m)+' m · Zona común: '+fmt(an.zonaComun_m)+' m · Altura libre de cálculo: '+fmt(alt)+' m',17,y+16);
@@ -674,7 +696,7 @@ function iniciar(){
   $('bAjustesOk').onclick=cerrarAjustes;
   $('veloAjustes').onclick=e=>{ if(e.target.id==='veloAjustes') cerrarAjustes(); };
   $('aSnap').onclick=()=>setLibre(false); $('aLibre').onclick=()=>setLibre(true);
-  $('bExpPDF').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); construirPDF(exp).save('Croquis_'+nombreFichero(exp)+'.pdf'); };
+  $('bExpPDF').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); construirPDF(exp).save(nombreCroquisPDF(exp)); };
   $('bExpDXF').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); descargar('Croquis_'+nombreFichero(exp)+'.dxf', new Blob([construirDXF(exp)],{type:'application/dxf'})); };
   $('bExpJSON').onclick=()=>{ if(!hayDibujo()) return alert('No hay nada que exportar.'); descargar('Croquis_'+nombreFichero(exp)+'.json', new Blob([JSON.stringify(analizar(exp),null,2)],{type:'application/json'})); };
   $('bBorrarCroquis').onclick=()=>{ const p=planta(); if(!confirm('¿Borrar todo lo dibujado en '+p.nombre.toLowerCase()+'?')) return; p.tramos=[]; pendienteNuevoTramo=false; $('veloAjustes').classList.remove('abierto'); ajustarVista(); dibujar(); guardar(); };
@@ -695,6 +717,6 @@ window.Croquis = {
   analizar,
   pdfDataUrl: e => construirPDF(e).output('datauristring'),
   dxfTexto: e => construirDXF(e),
-  nombreFichero
+  nombreFichero, nombreCroquisPDF
 };
 })();

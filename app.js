@@ -626,7 +626,7 @@ async function ficherosExpediente(exp, paraCorreo){
   if(!paraCorreo) lista.push({nombre:"datos.json", texto:datosJson(exp), mime:"application/json"});
   lista.push({nombre:nb+"checklist.pdf", dataUrl:await generateChecklistPDF(exp)});
   if(window.Croquis.hayDibujo(exp)){
-    lista.push({nombre:nb+"croquis.pdf", dataUrl:window.Croquis.pdfDataUrl(exp)});
+    lista.push({nombre:window.Croquis.nombreCroquisPDF(exp), dataUrl:window.Croquis.pdfDataUrl(exp)});
     lista.push({nombre:nb+"croquis.dxf", texto:window.Croquis.dxfTexto(exp), mime:"application/dxf"});
     lista.push({nombre:nb+"croquis.json", texto:JSON.stringify(window.Croquis.analizar(exp),null,2), mime:"application/json"});
   }
@@ -674,6 +674,25 @@ async function guardarEnDrive(exp){
   finally{ state.subiendo=false; }
 }
 
+// Quita el espacio vacío alrededor del trazo de la firma: así en el acta sale a buen tamaño
+function recortarFirma(dataUrl){ return new Promise(res=>{
+  if(!dataUrl){ res(dataUrl); return; }
+  const im=new Image();
+  im.onload=()=>{
+    const c=document.createElement("canvas"); c.width=im.width; c.height=im.height;
+    const x=c.getContext("2d"); x.drawImage(im,0,0);
+    const d=x.getImageData(0,0,c.width,c.height).data;
+    let x0=c.width,y0=c.height,x1=-1,y1=-1;
+    for(let y=0;y<c.height;y++) for(let i=0;i<c.width;i++){ if(d[(y*c.width+i)*4+3]>20){ if(i<x0)x0=i; if(i>x1)x1=i; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    if(x1<0){ res(dataUrl); return; }
+    const m=8; x0=Math.max(0,x0-m); y0=Math.max(0,y0-m); x1=Math.min(c.width-1,x1+m); y1=Math.min(c.height-1,y1+m);
+    const o=document.createElement("canvas"); o.width=x1-x0+1; o.height=y1-y0+1;
+    o.getContext("2d").drawImage(c,x0,y0,o.width,o.height,0,0,o.width,o.height);
+    res(o.toDataURL("image/png"));
+  };
+  im.onerror=()=>res(dataUrl); im.src=dataUrl;
+});}
+
 // ---------------- Impresos firmados (igual que ahora: acta + delegación por correo) ----------------
 async function generarImpresosFirmados(){
   const exp=state.expCurrent; if(!exp) return;
@@ -689,7 +708,7 @@ async function generarImpresosFirmados(){
       tipo:"impresos_firmados", numExp:prefijoExp(exp.numExp)||"sin", nombre:exp.datos.nombre, numeroDocumento:exp.datos.numeroDocumento,
       direccion:exp.datos.direccion, municipio:muniDe(exp), codigoPostal:exp.datos.codigoPostal,
       referenciaCatastral:exp.datos.referenciaCatastral, telefono:exp.datos.telefono, fechaVisita:exp.datos.fechaVisita,
-      tipoPropiedad:"parte_edificio", firmaPropietario:exp.fotos.firma, carpeta:carpetaDe(exp)
+      tipoPropiedad:"parte_edificio", firmaPropietario:await recortarFirma(exp.fotos.firma), carpeta:carpetaDe(exp)
     }, 180000);
     hideSync(); toast("✓ Impresos enviados a tu correo", 5000);
   }catch(e){ hideSync(); toast("Error: "+e.message, 5000); }
@@ -785,7 +804,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=3"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=4"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
