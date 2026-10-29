@@ -175,3 +175,11 @@ body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bot
 .filaSeg .txt small{color:#7A8C89;display:block}
 .filaSeg button{border:none;background:#F2F4F3;border-radius:8px;padding:8px 10px;font-size:15px}
 #resumenCroquis{margin:10px 0}
+
+/* v6: norte sin fijar, botón atrás visible, cámara nativa */
+.croq-nav button.falta{background:#FDECEA;color:#C0392B;font-weight:700;border-radius:8px;animation:latidoNorte 1.6s infinite}
+@keyframes latidoNorte{50%{background:#F8C9C3}}
+.bar .back{font-size:16px!important;display:flex;align-items:center;gap:2px;padding:4px 10px 4px 4px!important;border-radius:8px;background:rgba(255,255,255,.14)!important;white-space:nowrap}
+.bar .back::after{content:"Atrás";font-size:14px;font-weight:600}
+.cam-preview{width:100%;max-height:55vh;object-fit:contain;border-radius:8px;background:#000;display:none}
+.numexp-ok{font-size:12px;color:#2E7D5B;margin-top:4px}

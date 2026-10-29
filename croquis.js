@@ -229,6 +229,7 @@ function dibujar(){
   if(plantaVacia && !pendienteNuevoTramo) $('hint').textContent = g ? 'En gris, '+g.nombre.toLowerCase()+'. Empieza a dibujar desde una de sus esquinas para que coincidan.' : 'Dibuja con el dedo la dirección del primer tramo';
   $('hint').style.display = !plantaVacia && !pendienteNuevoTramo ? 'none' : 'block';
   if(hayDibujo()) dibujarNorteEn(ctx, W-34, 38, 20, raiz.norte||0);
+  $('bNorte').classList.toggle('falta', !norteOk());
   $('bPlantaTxt').textContent=m.nombre;
   actualizarTotal();
 }
@@ -480,7 +481,9 @@ function anguloDesdeEvento(e){
   const x=e.clientX-r.left-130, y=e.clientY-r.top-130;
   return Math.atan2(x,-y)*180/Math.PI;
 }
-function guardarNorte(){ modelo().norte=((norteTmp%360)+360)%360; cerrarNorte(); dibujar(); guardar(); }
+function guardarNorte(){ const m=modelo(); m.norte=((norteTmp%360)+360)%360; m.norteFijado=true; cerrarNorte(); dibujar(); guardar(); }
+// El norte cuenta como fijado si se pulsó "Fijar Norte" (o, en croquis antiguos, si tiene un rumbo distinto de 0)
+function norteOk(e){ e=e||exp; if(!e||!hayDibujo(e)) return true; const c=e.croquis||{}; return !!c.norteFijado || (+c.norte||0)!==0; }
 
 // Rumbo de la parte de arriba de la pantalla (0=N, horario), o null si el sensor no da rumbo absoluto
 function rumboPantalla(ev){
@@ -709,11 +712,20 @@ function abrir(e, cb){
   $('hint').textContent='Dibuja con el dedo la dirección del primer tramo';
   requestAnimationFrame(()=>redim());
 }
+// Botón atrás del móvil: si hay una hoja abierta, la cierra y devuelve true
+function cerrarHoja(){
+  if($('veloSeg').classList.contains('abierto')){ cerrarSeg(); return true; }
+  if($('veloNorte').classList.contains('abierto')){ cerrarNorte(); return true; }
+  if($('veloAjustes').classList.contains('abierto')){ $('bAjustesOk').click(); return true; }
+  for(const id of ['veloLista','veloPlantas']){ if($(id).classList.contains('abierto')){ $(id).classList.remove('abierto'); return true; } }
+  return false;
+}
+function pedirNorte(){ if(exp){ dibujar(); abrirNorte(); } }
 function cerrar(){ pararSensor(); ['veloSeg','veloNorte','veloLista','veloAjustes','veloPlantas'].forEach(id=>$(id).classList.remove('abierto')); exp=null; onChange=null; }
 
 window.Croquis = {
   MATERIALES, VIDRIOS, ALTURA_LIBRE, alturaDe,
-  abrir, cerrar, hayDibujo,
+  abrir, cerrar, hayDibujo, norteOk, pedirNorte, cerrarHoja,
   analizar,
   pdfDataUrl: e => construirPDF(e).output('datauristring'),
   dxfTexto: e => construirDXF(e),

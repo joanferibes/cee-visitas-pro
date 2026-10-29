@@ -1,4 +1,5 @@
-/* CEE VISITAS PRO · PWA v1 — Joanfe Ribes Oficina Tècnica
+/* CEE VISITAS PRO · PWA v6 — Joanfe Ribes Oficina Tècnica
+   v6: cámara nativa del móvil, botón atrás, norte obligatorio, nº de expediente desde Trello
    Visitas + croquis en una sola app. Basada en CEE Visitas v11 y Croquis CEE v1.0. */
 (function(){
 "use strict";
@@ -73,7 +74,25 @@ async function saveCfg(c){ c.key="main"; await dbPut("config",c); }
 // ---------------- Estado y utilidades ----------------
 const state={currentTab:"pendiente", expCurrent:null, online:navigator.onLine, firma:{ctx:null, drawing:false, hasDrawn:false}, camera:{stream:null, activeKey:null, n:0}, importing:false, subiendo:false, fileKey:null};
 const $=(id)=>document.getElementById(id);
-function go(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); const t=$("screen-"+id); if(t) t.classList.add("active"); state.pantalla=id; window.scrollTo(0,0); }
+function go(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); const t=$("screen-"+id); if(t) t.classList.add("active"); state.pantalla=id; window.scrollTo(0,0); armarAtras(); }
+// ---------------- Botón atrás (el de la app y el del móvil hacen lo mismo y nunca sacan de la app) ----------------
+function armarAtras(){ try{ if(!(history.state&&history.state.cee)) history.pushState({cee:1},""); }catch(e){} }
+async function atras(){
+  if($("modal-camera").style.display==="flex"){ cerrarCamara(); return; }
+  if($("modal-muni").style.display==="flex"||$("modal-muni").style.display==="block"){ $("muni-cancel").click(); return; }
+  const p=state.pantalla||"home";
+  if(p==="croquis" && window.Croquis.cerrarHoja()) return;
+  if(p==="croquis") return irA("datos");
+  if(p==="checklist") return irA("croquis");
+  if(p==="email") return irA("checklist");
+  if(p==="datos") return salirAInicio();
+  if(p==="importar") return go("nuevo");
+  if(p==="nuevo"||p==="cfg"){ go("home"); return renderHome(); }
+  toast("Estás en el inicio. Para salir usa el botón de inicio del móvil.");
+}
+window.addEventListener("popstate",()=>{ try{ history.pushState({cee:1},""); }catch(e){} atras(); });
+// Android ignora las entradas de historial creadas sin tocar la pantalla: se rearma con el primer toque
+document.addEventListener("pointerdown",()=>{ if(!(history.state&&history.state.g)){ try{ history.pushState({cee:1,g:1},""); }catch(e){} } },true);
 // Nº de expediente: se escribe tal cual (233-26-C); los ficheros llevan delante 2026233_ como siempre
 function prefijoExp(n){
   n=String(n||"").trim(); if(!n) return "";
@@ -273,6 +292,7 @@ async function abrirExpediente(id){
   rellenarFormDatos(exp); rellenarChecklist(exp);
   $("datos-title").textContent=exp.datos.direccion||"Expediente";
   go("datos");
+  autoNumExp(exp);
 }
 
 // ---------------- Importar del formulario web ----------------
@@ -324,6 +344,7 @@ async function importarSolicitud(id){
     rellenarFormDatos(exp); rellenarChecklist(exp);
     $("datos-title").textContent=exp.datos.direccion||"Expediente";
     go("datos"); toast("Importada ✓");
+    autoNumExp(exp);
   }catch(e){ toast("Error: "+e.message); }
   finally{ state.importing=false; }
 }
@@ -457,36 +478,40 @@ function renderGaleria(key){
     d.appendChild(b); cont.appendChild(d);
   });
 }
-async function abrirCamara(key,title){
+// Se usa la cámara del propio móvil (resolución completa, enfoque al tocar, flash y zoom).
+// Placas y detalles se guardan a más resolución para que se lean los datos.
+const RES_FOTO = { placas:[3200,0.92], detalle:[3200,0.92] };
+function abrirCamara(key,title){
   state.camera.activeKey=key; state.camera.n=0;
-  $("camera-title").textContent=title||"Capturar foto"; $("camera-count").textContent=FOTO_UNICA[key]?"Solo una foto: sustituye a la anterior.":"Puedes hacer varias seguidas.";
+  $("camera-title").textContent=title||"Foto";
+  $("camera-count").textContent=FOTO_UNICA[key]?"Solo una foto: sustituye a la anterior.":(key==="placas"?"Acércate a la placa, toca la pantalla para enfocar y usa el flash si está oscuro.":"Puedes hacer varias seguidas.");
+  $("camera-preview").style.display="none";
   $("modal-camera").style.display="flex";
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}}});
-    state.camera.stream=stream; $("camera-video").srcObject=stream; $("camera-video").play();
-  }catch(err){ cerrarCamara(); toast("No se pudo acceder a la cámara: "+err.message); }
+  $("inp-cam").click();          // abre la cámara del móvil
 }
 function cerrarCamara(){
-  if(state.camera.stream){ state.camera.stream.getTracks().forEach(t=>t.stop()); state.camera.stream=null; }
-  $("camera-video").srcObject=null; $("modal-camera").style.display="none";
+  $("modal-camera").style.display="none";
   const k=state.camera.activeKey; state.camera.activeKey=null; if(k) renderGaleria(k);
 }
-async function capturarFoto(){
-  const video=$("camera-video"), canvas=$("camera-canvas"), key=state.camera.activeKey, exp=state.expCurrent;
-  if(!key||!exp||!video.videoWidth) return;
-  let w=video.videoWidth, h=video.videoHeight; const max=1600;
-  if(w>h && w>max){ h=Math.round(h*max/w); w=max; } else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
-  canvas.width=w; canvas.height=h; canvas.getContext("2d").drawImage(video,0,0,w,h);
-  if(FOTO_UNICA[key]){ exp.fotos[key]=[canvas.toDataURL("image/jpeg",0.85)]; await guardarExpedienteLocal(exp); if(navigator.vibrate) navigator.vibrate(30); toast("✓ Foto guardada"); cerrarCamara(); return; }
-  exp.fotos[key].push(canvas.toDataURL("image/jpeg",0.85));
-  await guardarExpedienteLocal(exp);
-  state.camera.n++; $("camera-count").textContent="✓ "+state.camera.n+" foto(s) guardada(s). Sigue o pulsa Cerrar.";
-  if(navigator.vibrate) navigator.vibrate(30);
+function capturarFoto(){ if(state.camera.activeKey) $("inp-cam").click(); }
+async function onFotoCamara(e){
+  const f=e.target.files&&e.target.files[0]; e.target.value="";
+  const key=state.camera.activeKey, exp=state.expCurrent; if(!f||!key||!exp) return;
+  const [max,q]=RES_FOTO[key]||[2000,0.85];
+  showSync("Guardando foto…");
+  try{
+    const url=await redimensionar(f,max,q);
+    if(FOTO_UNICA[key]) exp.fotos[key]=[url]; else exp.fotos[key].push(url);
+    await guardarExpedienteLocal(exp);
+    state.camera.n++; if(navigator.vibrate) navigator.vibrate(30);
+    $("camera-preview").src=url; $("camera-preview").style.display="block";
+    $("camera-count").textContent=FOTO_UNICA[key]?"✓ Foto guardada.":"✓ "+state.camera.n+" foto(s) guardada(s). Haz otra o pulsa Listo.";
+  }finally{ hideSync(); }
 }
 function redimensionar(file,maxDim,q){ return new Promise(resolve=>{
   const r=new FileReader();
   r.onload=e=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height;
-      if(w>h && w>maxDim){ h=h*maxDim/w; w=maxDim; } else if(h>maxDim){ w=w*maxDim/h; h=maxDim; }
+      if(w>=h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; } else if(h>w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
       const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); resolve(c.toDataURL("image/jpeg",q)); };
     img.src=e.target.result; };
   r.readAsDataURL(file);
@@ -649,6 +674,7 @@ async function guardarEnDrive(exp){
   if(!(await backendUrl())){ toast("Falta la URL del Apps Script (⚙ Configuración)"); return false; }
   state.subiendo=true;
   try{
+    await autoNumExp(exp);
     const ficheros=await ficherosExpediente(exp,false);
     let fallos=[];
     for(let i=0;i<ficheros.length;i++){
@@ -701,6 +727,7 @@ async function generarImpresosFirmados(){
   if(!exp.fotos.firma){ toast("Falta la firma del propietario"); return; }
   if(!exp.datos.nombre || !exp.datos.numeroDocumento){ toast("Faltan nombre o DNI del propietario"); return; }
   if(!exp.datos.direccion){ toast("Falta la dirección"); return; }
+  await autoNumExp(exp);
   await guardarExpedienteLocal(exp);
   showSync("Generando impresos firmados…");
   try{
@@ -717,6 +744,7 @@ async function generarImpresosFirmados(){
 // ---------------- Correo al colaborador (un solo borrador con todo) ----------------
 async function abrirPantallaEmail(){
   const exp=state.expCurrent; if(!exp) return;
+  await autoNumExp(exp);
   const cfg=await getCfg(), c=exp.checklist, muniStr=muniDe(exp);
   $("e-to").value=cfg.emailColab||"";
   $("e-asunto").value="CEE "+(prefijoExp(exp.numExp)?prefijoExp(exp.numExp)+"__":"")+(exp.datos.direccion||"");
@@ -775,6 +803,36 @@ async function testConexion(){
   }catch(e){ hideSync(); setStatus(false); toast("Sin conexión: "+e.message); }
 }
 
+// ---------------- Nº de expediente desde Trello ----------------
+// Si el expediente no tiene número, el servidor busca la tarjeta de Trello por dirección / cliente.
+// No se enseña nada de Trello: si la encuentra, el número aparece puesto; si no, se escribe a mano.
+async function autoNumExp(exp){
+  if(!exp || exp.numExp || !navigator.onLine) return;
+  const d=exp.datos; if(!d.direccion && !d.nombre) return;
+  try{
+    const r=await jsonp(await backendUrl(),{action:"buscar_numexp",direccion:d.direccion||"",nombre:d.nombre||"",municipio:muniDe(exp)},15000);
+    if(r && r.status==="ok" && r.numExp && !exp.numExp){
+      exp.numExp=r.numExp;
+      if(state.expCurrent===exp && state.pantalla==="datos") $("f-numexp").value=r.numExp;
+      await guardarExpedienteLocal(exp); pushExpediente(exp).catch(()=>{});
+      toast("Nº de expediente: "+r.numExp);
+    }
+  }catch(e){}
+}
+async function autoNumExpDesdeForm(){
+  const exp=state.expCurrent; if(!exp || $("f-numexp").value.trim()) return;
+  leerFormDatos(exp); await autoNumExp(exp);
+}
+// ---------------- Norte obligatorio ----------------
+async function faltaNorte(exp){
+  if(!exp || window.Croquis.norteOk(exp)) return false;
+  toast("Falta fijar el NORTE del croquis. Fíjalo antes de guardar.",5000);
+  if(navigator.vibrate) navigator.vibrate([60,60,60]);
+  if(state.pantalla!=="croquis") await irA("croquis");
+  setTimeout(()=>window.Croquis.pedirNorte(),350);
+  return true;
+}
+
 // ---------------- Croquis ----------------
 function abrirCroquis(){
   const exp=state.expCurrent; if(!exp) return;
@@ -804,7 +862,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=5"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=6"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
@@ -824,14 +882,15 @@ async function init(){
     toast(ok?"Guardado ✓ (sigue en pendientes)":"Guardado en local (↑ pendiente)"); renderHome();
   };
   document.querySelectorAll("[data-paso]").forEach(b=>{ b.onclick=()=>irA(b.getAttribute("data-paso")); });
-  $("croq-back").onclick=()=>salirAInicio();
-  $("bCroqSig").onclick=()=>irA("checklist");
-  $("chk-back").onclick=()=>salirAInicio();
-  $("datos-back").onclick=()=>salirAInicio();
+  document.querySelectorAll(".bar .back").forEach(b=>{ b.onclick=()=>atras(); });
+  $("bCroqSig").onclick=async()=>{ if(await faltaNorte(state.expCurrent)) return; irA("checklist"); };
+  $("f-direccion").addEventListener("change",autoNumExpDesdeForm);
+  $("f-nombre").addEventListener("change",autoNumExpDesdeForm);
 
   $("btn-guardar").onclick=async()=>{
     const exp=state.expCurrent; if(!exp) return;
     leerChecklist(exp);
+    if(await faltaNorte(exp)) return;
     if(exp.estado!=="enviado") exp.estado="visitado";
     await guardarExpedienteLocal(exp);
     const ok=await pushExpediente(exp);
@@ -839,9 +898,9 @@ async function init(){
     renderHome();
     if(navigator.onLine) await guardarEnDrive(exp);
   };
-  $("btn-drive").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); await guardarEnDrive(exp); };
-  $("btn-enviar").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); await abrirPantallaEmail(); };
-  $("btn-crear-borrador").onclick=()=>crearBorradorGmail();
+  $("btn-drive").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await guardarEnDrive(exp); };
+  $("btn-enviar").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await abrirPantallaEmail(); };
+  $("btn-crear-borrador").onclick=async()=>{ if(await faltaNorte(state.expCurrent)) return; crearBorradorGmail(); };
   $("btn-generar-impresos").onclick=()=>generarImpresosFirmados();
 
   $("c-reforma").onchange=toggleReforma; $("c-calTipo").onchange=toggleCalef; $("c-refTipo").onchange=toggleRefri;
@@ -854,7 +913,7 @@ async function init(){
   document.querySelectorAll("[data-cam]").forEach(b=>{ b.onclick=()=>abrirCamara(b.getAttribute("data-cam"), b.getAttribute("data-cam-title")); });
   document.querySelectorAll("[data-file]").forEach(b=>{ b.onclick=()=>{ state.fileKey=b.getAttribute("data-file"); (b.getAttribute("data-pdf")?$("inp-fotos-pdf"):$("inp-fotos")).click(); }; });
   $("inp-fotos").onchange=onFicherosElegidos; $("inp-fotos-pdf").onchange=onFicherosElegidos;
-  $("camera-cancel").onclick=cerrarCamara; $("camera-capture").onclick=capturarFoto;
+  $("camera-cancel").onclick=cerrarCamara; $("camera-capture").onclick=capturarFoto; $("inp-cam").onchange=onFotoCamara;
 
   $("btn-save-cfg").onclick=()=>guardarCfgUI();
   $("btn-sync-now").onclick=()=>sincronizar();
@@ -864,6 +923,7 @@ async function init(){
   window.addEventListener("online",()=>{ setStatus(true); sincronizar(); });
   window.addEventListener("offline",()=>setStatus(false));
   setStatus(navigator.onLine);
+  armarAtras();
   await renderHome();
   const idParam=new URLSearchParams(location.search).get("id");
   if(idParam){ await mostrarImportar(); await importarSolicitud(idParam); }

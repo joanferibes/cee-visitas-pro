@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-pro-192.png">
 <link rel="icon" href="icon-pro-192.png">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -36,12 +36,12 @@
 <!-- Modal cámara -->
 <div class="modal" id="modal-camera" style="display:none">
   <div class="modal-box" style="max-width:600px">
-    <h3 id="camera-title">Capturar foto</h3>
-    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:8px;background:#000"></video>
-    <canvas id="camera-canvas" style="display:none"></canvas>
+    <h3 id="camera-title">Foto</h3>
+    <img id="camera-preview" class="cam-preview" alt="">
+    <input type="file" id="inp-cam" accept="image/*" capture="environment" hidden>
     <div class="modal-btns" style="margin-top:12px">
-      <button class="btn-secondary" id="camera-cancel">Cerrar</button>
-      <button class="btn-primary" id="camera-capture">📷 Capturar</button>
+      <button class="btn-secondary" id="camera-cancel">Listo</button>
+      <button class="btn-primary" id="camera-capture">📷 Hacer foto</button>
     </div>
     <p class="muted tiny" id="camera-count" style="margin-top:8px">—</p>
   </div>
@@ -632,8 +632,8 @@
 </section>
 
 </div>
-<script src="config.js?v=5"></script>
-<script src="croquis.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="config.js?v=6"></script>
+<script src="croquis.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
