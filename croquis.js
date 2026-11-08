@@ -11,6 +11,9 @@
 
 const MATERIALES = ["PVC","Aluminio","Aluminio RPT","Madera","Hierro"];
 const VIDRIOS    = ["Simple","Doble","Doble bajo emisivo","Triple"];
+// Puertas (o huecos) sin cristal: solo en la lista de cada hueco, no en el vidrio por defecto
+const VIDRIO_SIN = "Sin vidrio (100% marco)";
+const VIDRIOS_HUECO = VIDRIOS.concat([VIDRIO_SIN]);
 const ALTURA_LIBRE = 2.70;
 const DIRS = ['N','NE','E','SE','S','SO','O','NO'];
 
@@ -84,7 +87,7 @@ function etiquetasHuecos(m){
   return map;
 }
 function abrevia(s){ return {'PVC':'PVC','Madera':'mad','Aluminio RPT':'RPT','Hierro':'hierro','Aluminio':'alu'}[s]||s; }
-function abreviaVid(v){ return {'Simple':'simple','Doble':'doble','Doble bajo emisivo':'BE','Triple':'triple'}[v]||v; }
+function abreviaVid(v){ return {'Simple':'simple','Doble':'doble','Doble bajo emisivo':'BE','Triple':'triple','Sin vidrio (100% marco)':'sin vidrio'}[v]||v; }
 function txtHueco(e,s,tag){
   const md=matDef(e), vd=vidDef(e);
   let extra='';
@@ -142,7 +145,8 @@ function analizarPlanta(e, m, norte, alt){
         const a=s.len*s.alto, tag=tags.get(ti+'-'+si);
         Object.assign(item,{ etiqueta:tag, alto_m:+s.alto.toFixed(3), superficie_m2:+a.toFixed(3), material:s.mat||matDef(e), vidrio:s.vid||vidDef(e) });
         porOri[ori].longitud_m+=s.len; porOri[ori].muroBruto_m2+=s.len*alt; porOri[ori].huecos_m2+=a;
-        huecos.push({ etiqueta:tag, tipo:s.kind==='ventana'?'Ventana':'Puerta', ancho_m:+s.len.toFixed(3), alto_m:+s.alto.toFixed(3), superficie_m2:+a.toFixed(3), material:s.mat||matDef(e), vidrio:s.vid||vidDef(e), orientacion:ori });
+        huecos.push({ etiqueta:tag, tipo:s.kind==='ventana'?'Ventana':'Puerta', ancho_m:+s.len.toFixed(3), alto_m:+s.alto.toFixed(3), superficie_m2:+a.toFixed(3), material:s.mat||matDef(e), vidrio:s.vid||vidDef(e), orientacion:ori,
+          porcentajeMarco: s.vid===VIDRIO_SIN ? 100 : null });
       }
       segs.push(item);
     });
@@ -668,7 +672,7 @@ function descargar(nombre, blob){ const a=document.createElement('a'); a.href=UR
 function iniciar(){
   if(iniciado) return; iniciado=true;
   cv=$('cv'); ctx=cv.getContext('2d');
-  opts($('inMat'),MATERIALES); opts($('inVid'),VIDRIOS); opts($('inMatDef'),MATERIALES); opts($('inVidDef'),VIDRIOS);
+  opts($('inMat'),MATERIALES); opts($('inVid'),VIDRIOS_HUECO); opts($('inMatDef'),MATERIALES); opts($('inVidDef'),VIDRIOS);
   engancharLienzo();
   window.addEventListener('resize',()=>{ if(exp) redim(); });
   $('tPared').onclick=()=>setTipo('pared'); $('tVentana').onclick=()=>setTipo('ventana'); $('tPuerta').onclick=()=>setTipo('puerta');

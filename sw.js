@@ -1,12 +1,12 @@
-// CEE Visitas Pro · Service Worker v6
-const CACHE_NAME = "cee-visitas-pro-v6";
+// CEE Visitas Pro · Service Worker v7
+const CACHE_NAME = "cee-visitas-pro-v7";
 const URLS = [
   "./",
   "./index.html",
-  "./app.js?v=6",
-  "./croquis.js?v=6",
-  "./config.js?v=6",
-  "./style.css?v=6",
+  "./app.js?v=7",
+  "./croquis.js?v=7",
+  "./config.js?v=7",
+  "./style.css?v=7",
   "./manifest.json",
   "./icon-pro-192.png",
   "./icon-pro-512.png",

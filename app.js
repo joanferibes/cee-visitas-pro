@@ -833,6 +833,40 @@ async function faltaNorte(exp){
   return true;
 }
 
+// ---------------- Comprobación final (solo avisa, nunca impide guardar) ----------------
+// Lo que necesita la tarea nocturna de CE3X para no quedarse bloqueada
+function faltasExpediente(exp){
+  const d=exp.datos||{}, c=exp.checklist||{}, f=exp.fotos||{}, F=[];
+  const vacio=v=>v==null||String(v).trim()==="";
+  if(vacio(d.direccion)) F.push("Dirección");
+  if(vacio(muniDe(exp))) F.push("Municipio");
+  if(vacio(d.referenciaCatastral)) F.push("Referencia catastral (sin ella no hay año, zona ni plano de situación)");
+  if(vacio(d.fechaVisita)) F.push("Fecha de visita");
+  if(vacio(c.tipoViv)) F.push("Tipo de inmueble");
+  if(vacio(c.techo)) F.push("Techo");
+  if(vacio(c.suelo)) F.push("Suelo");
+  if(vacio(c.carpinteria)||vacio(c.acristalamiento)) F.push("Carpintería y vidrio por defecto");
+  if(vacio(c.permeabilidad)) F.push("Permeabilidad de los huecos");
+  if(vacio(c.calTipo)) F.push("Calefacción (aunque sea «No tiene instalada»)");
+  else if(c.calTipo!=="No tiene instalada"){ if(vacio(c.calPct)) F.push("% de vivienda calefactada"); if(vacio(c.calAntig)) F.push("Antigüedad de la calefacción"); }
+  if(vacio(c.refTipo)) F.push("Refrigeración (aunque sea «No tiene instalada»)");
+  else if(c.refTipo!=="No tiene instalada"){ if(vacio(c.refPct)) F.push("% de vivienda climatizada"); if(vacio(c.refAntig)) F.push("Antigüedad de la refrigeración"); }
+  if(vacio(c.acsTipo)) F.push("Sistema de ACS");
+  else if(c.acsModalidad==="Con acumulador" && vacio(c.acsAcum)) F.push("Litros del acumulador de ACS");
+  if(c.renPaneles){ if(vacio(c.renTipo)) F.push("Tipo de placas solares"); else if(c.renTipo!=="Solar térmica" && vacio(c.renPotencia)) F.push("Potencia de las placas fotovoltaicas"); }
+  if(!window.Croquis.hayDibujo(exp)) F.push("Croquis");
+  else { const an=window.Croquis.analizar(exp); if(!an.poligonoCerrado) F.push("Cerrar el contorno del croquis (alguna planta está abierta)"); }
+  if(!(f.fachada||[]).length) F.push("Foto de fachada");
+  if(!(f.plano||[]).length) F.push("Plano de situación");
+  if(c.firmaReq && !f.firma) F.push("Firma del titular");
+  return F;
+}
+function avisarFaltas(exp){
+  const F=faltasExpediente(exp); if(!F.length) return;
+  $("aviso-lista").innerHTML=F.map(x=>"<li>"+esc(x)+"</li>").join("");
+  $("modal-aviso").style.display="flex";
+}
+
 // ---------------- Croquis ----------------
 function abrirCroquis(){
   const exp=state.expCurrent; if(!exp) return;
@@ -862,7 +896,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=6"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=7"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
@@ -897,7 +931,9 @@ async function init(){
     toast(ok?"Guardado ✓ (marcado como visitado)":"Guardado en local (↑ pendiente)");
     renderHome();
     if(navigator.onLine) await guardarEnDrive(exp);
+    avisarFaltas(exp);
   };
+  $("aviso-ok").onclick=()=>{ $("modal-aviso").style.display="none"; };
   $("btn-drive").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await guardarEnDrive(exp); };
   $("btn-enviar").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await abrirPantallaEmail(); };
   $("btn-crear-borrador").onclick=async()=>{ if(await faltaNorte(state.expCurrent)) return; crearBorradorGmail(); };

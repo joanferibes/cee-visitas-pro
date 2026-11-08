@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-pro-192.png">
 <link rel="icon" href="icon-pro-192.png">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -19,6 +19,16 @@
 
 <div class="toast" id="toast"></div>
 <div class="sync-bar" id="sync-bar"><div class="sync-caja"><div class="sync-rueda"></div><span id="sync-text">Sincronizando…</span></div></div>
+
+<!-- Modal comprobación final: solo avisa, no impide guardar -->
+<div class="modal" id="modal-aviso" style="display:none">
+  <div class="modal-box">
+    <h3>⚠ Guardado, pero falta:</h3>
+    <ul id="aviso-lista" class="aviso-lista"></ul>
+    <p class="muted tiny">Se ha guardado igualmente. Sin estos datos el CEE de la noche puede quedarse a medias.</p>
+    <div class="modal-btns"><button class="btn-primary" id="aviso-ok">Entendido</button></div>
+  </div>
+</div>
 
 <!-- Modal municipio -->
 <div class="modal" id="modal-muni" style="display:none">
@@ -632,8 +642,8 @@
 </section>
 
 </div>
-<script src="config.js?v=6"></script>
-<script src="croquis.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="config.js?v=7"></script>
+<script src="croquis.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

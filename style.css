@@ -183,3 +183,7 @@ body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bot
 .bar .back::after{content:"Atrás";font-size:14px;font-weight:600}
 .cam-preview{width:100%;max-height:55vh;object-fit:contain;border-radius:8px;background:#000;display:none}
 .numexp-ok{font-size:12px;color:#2E7D5B;margin-top:4px}
+
+/* v7: aviso de lo que falta al guardar */
+.aviso-lista{margin:8px 0 10px 18px;padding:0;font-size:14px;line-height:1.45;color:#8A2A1E}
+.aviso-lista li{margin-bottom:3px}
