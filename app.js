@@ -833,6 +833,32 @@ async function faltaNorte(exp){
   return true;
 }
 
+// ---------------- Ver en el mapa / Cómo llegar ----------------
+// Con referencia catastral: coordenadas del Catastro (punto de la parcela). Si no hay o falla: la dirección escrita.
+// Se abre Google Maps (en el móvil, la app de Maps, lista para "Cómo llegar").
+async function verEnMapa(){
+  const exp=state.expCurrent; if(!exp) return;
+  leerFormDatos(exp);
+  const d=exp.datos, rc=(d.referenciaCatastral||"").replace(/\s/g,"").toUpperCase();
+  const textoDir=[d.direccion, muniDe(exp), d.codigoPostal, "Alicante"].filter(x=>x&&String(x).trim()).join(", ");
+  if(!d.direccion && rc.length<14){ toast("Pon la dirección o la referencia catastral",3500); return; }
+  // La ventana se abre ya (con el toque) y luego se le da la dirección: si se abre tras la consulta, el móvil la bloquea
+  let ventana=null; try{ ventana=window.open("about:blank","_blank"); }catch(e){}
+  let destino="";
+  if(rc.length>=14 && navigator.onLine){
+    try{
+      const r=await fetch("https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCoordenadas.svc/json/Consulta_CPMRC?RefCat="+encodeURIComponent(rc.slice(0,14))+"&SRS=EPSG:4326");
+      const j=await r.json(), co=j&&j.Consulta_CPMRCResult&&j.Consulta_CPMRCResult.coordenadas&&j.Consulta_CPMRCResult.coordenadas.coord, g=co&&co[0]&&co[0].geo;
+      if(g) destino=parseFloat(g.ycen).toFixed(6)+","+parseFloat(g.xcen).toFixed(6);
+      else toast("El Catastro no encuentra esa referencia: busco por la dirección",3500);
+    }catch(e){ toast("No se pudo consultar el Catastro: busco por la dirección",3500); }
+  }
+  if(!destino) destino=textoDir;
+  const url="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(destino);
+  if(ventana && !ventana.closed) ventana.location.href=url;
+  else window.open(url,"_blank");
+}
+
 // ---------------- Comprobación final (solo avisa, nunca impide guardar) ----------------
 // Lo que necesita la tarea nocturna de CE3X para no quedarse bloqueada
 function faltasExpediente(exp){
@@ -896,7 +922,7 @@ async function salirAInicio(){ await guardarPantallaActual(); go("home"); render
 
 // ---------------- Arranque ----------------
 async function init(){
-  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=7"); }catch(e){} }
+  if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js?v=8"); }catch(e){} }
   const optsSel=(id,lista)=>{ $(id).innerHTML='<option value="">—</option>'+lista.map(v=>'<option>'+v+'</option>').join(""); };
   optsSel("c-carpinteria", window.Croquis.MATERIALES); optsSel("c-acristalamiento", window.Croquis.VIDRIOS);
 
@@ -934,6 +960,7 @@ async function init(){
     avisarFaltas(exp);
   };
   $("aviso-ok").onclick=()=>{ $("modal-aviso").style.display="none"; };
+  $("btn-mapa").onclick=()=>verEnMapa();
   $("btn-drive").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await guardarEnDrive(exp); };
   $("btn-enviar").onclick=async()=>{ const exp=state.expCurrent; if(!exp) return; leerChecklist(exp); await guardarExpedienteLocal(exp); if(await faltaNorte(exp)) return; await abrirPantallaEmail(); };
   $("btn-crear-borrador").onclick=async()=>{ if(await faltaNorte(state.expCurrent)) return; crearBorradorGmail(); };
